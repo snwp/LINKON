@@ -49,6 +49,9 @@ export type Doc = {
   mobile?: Doc;
   /** Quadros extras: outras telas do mesmo site (Sobre, Pesquisar...). Só existem no documento principal. */
   frames?: Frame[];
+  /** Posição do quadro principal no canvas, em px de página. Sem valor, 0,0. */
+  x?: number;
+  y?: number;
 };
 
 /**
@@ -195,6 +198,8 @@ function readFrame(d: Partial<Doc>, defaults: Doc): Doc {
     background: typeof d.background === 'string' && HEX.test(d.background) ? d.background : defaults.background,
     mobile: undefined,
     frames: undefined,
+    x: finite(d.x, 0),
+    y: finite(d.y, 0),
     elements: (d.elements as El[]).filter((e) => e && typeof e === 'object').map(cleanEl),
   };
 }

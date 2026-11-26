@@ -538,7 +538,7 @@
     view === 'mobile' && root.mobile
       ? [{ id: MAIN, name: '', x: 0, y: 0, d: root.mobile, frame: null }]
       : [
-          { id: MAIN, name: t('Página inicial'), x: 0, y: 0, d: root, frame: null },
+          { id: MAIN, name: t('Página inicial'), x: root.x ?? 0, y: root.y ?? 0, d: root, frame: null },
           ...(root.frames ?? []).map((f) => ({ id: f.id, name: f.name, x: f.x, y: f.y, d: f as Doc, frame: f })),
         ],
   );
@@ -637,13 +637,14 @@
   }
 
   /** Arrastar o nome de um quadro extra move o quadro. */
-  let frameDrag: { f: Frame; startX: number; startY: number; x: number; y: number; moved: boolean } | null = null;
+  /** Arrastar um quadro (pelo nome ou pelo corpo, se não está em edição). O principal guarda a posição em `root.x/y`. */
+  let frameDrag: { f: { x?: number; y?: number }; startX: number; startY: number; x: number; y: number; moved: boolean } | null = null;
 
   function startFrameDrag(e: PointerEvent, f: Slot) {
     if (e.button !== 0) return;
     e.stopPropagation();
     activate(f.id);
-    if (f.frame) frameDrag = { f: f.frame, startX: e.clientX, startY: e.clientY, x: f.frame.x, y: f.frame.y, moved: false };
+    frameDrag = { f: f.frame ?? root, startX: e.clientX, startY: e.clientY, x: f.x, y: f.y, moved: false };
   }
 
   function focusSelect(node: HTMLInputElement) {
@@ -925,7 +926,7 @@
                   onpointerdown={(e) => startFrameDrag(e, f)}
                   ondblclick={() => f.frame && (renamingId = f.id)}
                   oncontextmenu={(e) => frameMenu(e, f)}
-                  data-tip={f.frame ? t('Arraste para mover. Clique duas vezes para renomear.') : undefined}
+                  data-tip={f.frame ? t('Arraste para mover. Clique duas vezes para renomear.') : t('Arraste para mover.')}
                 >{f.name}</button>
               {/if}
             {/if}
@@ -1009,11 +1010,7 @@
               <div
                 class="page still"
                 style={`width:${f.d.width}px;height:${f.d.height}px;background:${f.d.background};transform:scale(${zoom})`}
-                onpointerdown={(e) => {
-                  if (e.button !== 0) return;
-                  e.stopPropagation();
-                  activate(f.id);
-                }}
+                onpointerdown={(e) => startFrameDrag(e, f)}
                 oncontextmenu={(e) => frameMenu(e, f)}
                 role="button"
                 tabindex="-1"
@@ -1310,7 +1307,7 @@
   }
 
   .page.still {
-    cursor: pointer;
+    cursor: grab;
   }
 
   .page.still .el {
