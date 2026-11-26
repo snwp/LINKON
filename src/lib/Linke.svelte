@@ -1,12 +1,12 @@
 <script lang="ts">
   /**
-   * Linke, o mascote do Editor. Base geométrica: um círculo com dois olhos vazados.
+   * Linke, o mascote do Editor. Base geométrica: um círculo com dois olhos vazados. O viewBox recorta o círculo rente, para ele ocupar todo o `size`.
    * Os olhos são furos (regra evenodd), então Linke mostra o fundo em qualquer tema e herda a cor do texto.
    */
   let { size = 16 }: { size?: number } = $props();
 </script>
 
-<svg width={size} height={size} viewBox="0 0 48 48" aria-hidden="true" class="linke">
+<svg width={size} height={size} viewBox="8 8 32 32" aria-hidden="true" class="linke">
   <path
     fill="currentColor"
     fill-rule="evenodd"
