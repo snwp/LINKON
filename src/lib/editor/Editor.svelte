@@ -930,7 +930,7 @@
   <div class="body" style={`grid-template-columns:${panels.left ? '0' : '240px'} minmax(0, 1fr) ${panels.right ? '0' : '340px'}`}>
     <!-- Os painéis continuam montados quando minimizados (guardam aba, rascunho e conversa); só somem da grade. -->
     <div class="slot left" class:gone={panels.left}>
-      <Panel bind:doc={() => doc, () => {}} {selectedId} pageId={page.id} {projectId} select={(id) => (selectedId = id)} {commit} {insert} {dropAt} onminimize={() => setPanel('left', true)} />
+      <Panel bind:doc={() => doc, () => {}} {selectedId} {projectId} select={(id) => (selectedId = id)} {commit} {insert} {dropAt} onminimize={() => setPanel('left', true)} />
     </div>
 
     <div class="stage-wrap">

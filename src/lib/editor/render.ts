@@ -24,8 +24,11 @@ export type RenderOptions = {
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-const BASE_CSS = `*{box-sizing:border-box}html,body{margin:0}body{background:#e6e6e6}
-.page{position:relative;margin:0 auto;overflow:hidden;transform-origin:top left}
+// Faixas de largura total (`.bleed`) continuam até as bordas da janela com a própria cor: em tela mais larga
+// que a página, o site preenche tudo e o conteúdo fica no centro. A página só corta embaixo e em cima.
+const BASE_CSS = `*{box-sizing:border-box}html{overflow-x:clip}html,body{margin:0}
+.page{position:relative;margin:0 auto;overflow-x:visible;overflow-y:clip;transform-origin:top left}
+.el.bleed{box-shadow:0 0 0 100vmax var(--bleed);clip-path:inset(0 -100vmax)}
 .el{position:absolute;display:block;overflow:hidden;white-space:pre-wrap;overflow-wrap:anywhere;text-decoration:none}
 img.el{padding:0}
 .ref{display:flex;flex-direction:column;gap:6px}.ref strong{font-weight:600}.ref span{opacity:.7;font-size:.85em}`;
@@ -39,11 +42,12 @@ const hasMotion = (d: Doc) => moves(d) || (!!d.mobile && moves(d.mobile));
 
 export const LINKON_TAG = '<script src="linkon.js"></script>';
 
-function renderElement(e: El, o: RenderOptions): string {
+function renderElement(e: El, o: RenderOptions, pageW: number): string {
   const a = animAttrs(e);
-  const cls = `el${a.cls}`;
+  const bleed = !!e.fill && e.x <= 0 && e.x + e.w >= pageW;
+  const cls = `el${a.cls}${bleed ? ' bleed' : ''}`;
   // Escapado mesmo vindo de parseDoc: um valor com aspas nunca pode fechar o atributo.
-  const style = esc(elementStyle(e) + a.style);
+  const style = esc(elementStyle(e) + a.style + (bleed ? `;--bleed:${e.fill}` : ''));
   switch (e.type) {
     case 'objeto3d':
       return `<div class="${cls}" data-3d="${esc(JSON.stringify(cleanScene(e.scene)))}" style="${style}"></div>`;
@@ -70,7 +74,7 @@ function renderElement(e: El, o: RenderOptions): string {
 function renderFrame(d: Doc, o: RenderOptions, cls: string): string {
   const body = d.elements
     .filter((e) => !e.hidden)
-    .map((e) => renderElement(e, o))
+    .map((e) => renderElement(e, o, Number(d.width) || 0))
     .join('\n');
   return `<main class="page${cls}" style="width:${Number(d.width) || 0}px;height:${Number(d.height) || 0}px;background:${esc(d.background)}">\n${body}\n</main>`;
 }
@@ -82,7 +86,7 @@ function renderFrame(d: Doc, o: RenderOptions, cls: string): string {
 export function renderHtml(doc: Doc, o: RenderOptions): string {
   const motion = hasMotion(doc);
   const pages = doc.mobile
-    ? `${renderFrame(doc, o, ' desktop')}\n${renderFrame(doc.mobile, o, ' mobile')}\n<style>.page.mobile{display:none}@media (max-width:${BREAKPOINT}px){.page.desktop{display:none}.page.mobile{display:block}}</style>`
+    ? `${renderFrame(doc, o, ' desktop')}\n${renderFrame(doc.mobile, o, ' mobile')}\n<style>.page.mobile{display:none}@media (max-width:${BREAKPOINT}px){.page.desktop{display:none}.page.mobile{display:block}body{background:${esc(doc.mobile.background)}!important}}</style>`
     : renderFrame(doc, o, '');
   return `<!doctype html>
 <html lang="pt-BR">
@@ -93,7 +97,7 @@ export function renderHtml(doc: Doc, o: RenderOptions): string {
 <title>${esc(o.title)}</title>
 <style>${o.fontCss ?? ''}${BASE_CSS}${motion ? ANIM_CSS : ''}</style>
 </head>
-<body>
+<body style="background:${esc(doc.background)}">
 ${pages}
 ${o.fitScript === 'file' ? '<script src="fit.js"></script>' : o.fitScript ? FIT : ''}
 ${motion && o.fitScript === 'file' ? LINKON_TAG : ''}

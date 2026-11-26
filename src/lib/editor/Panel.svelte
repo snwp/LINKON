@@ -11,7 +11,6 @@
   type Props = {
     doc: Doc;
     selectedId: string | null;
-    pageId: number;
     projectId: number | null;
     select: (id: string | null) => void;
     commit: () => void;
@@ -20,7 +19,7 @@
     dropAt: (type: ElementType, extra: Partial<El>, cx: number, cy: number) => void;
     onminimize: () => void;
   };
-  let { doc = $bindable(), selectedId, pageId, projectId, select, commit, insert, dropAt, onminimize }: Props = $props();
+  let { doc = $bindable(), selectedId, projectId, select, commit, insert, dropAt, onminimize }: Props = $props();
 
   /**
    * Arrastar do painel para o canvas com eventos de ponteiro (o arrastar nativo do HTML fica desligado
@@ -57,7 +56,7 @@
     addEventListener('pointercancel', cancel);
   }
 
-  let tab = $state<'camadas' | 'inserir' | 'paginas'>('camadas');
+  let tab = $state<'camadas' | 'inserir'>('camadas');
 
   const ICON: Record<ElementType, typeof Type> = { texto: Type, bloco: Square, secao: PanelTop, link: Link2, imagem: Image, referencia: StickyNote, objeto3d: Box };
   const BASIC: ElementType[] = ['texto', 'bloco', 'secao', 'link', 'objeto3d'];
@@ -201,7 +200,6 @@
     <div class="tabs" use:slidingPill role="tablist">
       <button role="tab" aria-selected={tab === 'camadas'} onclick={() => (tab = 'camadas')}>{t('Camadas')}</button>
       <button role="tab" aria-selected={tab === 'inserir'} onclick={() => (tab = 'inserir')}>{t('Inserir')}</button>
-      <button role="tab" aria-selected={tab === 'paginas'} onclick={() => (tab = 'paginas')}>{t('Páginas')}</button>
     </div>
     <button class="min" onclick={onminimize} aria-label={t('Minimizar o painel')} data-tip={t('Minimizar')}><PanelLeftClose size={15} aria-hidden="true" /></button>
   </div>
@@ -421,13 +419,6 @@
         </div>
       {/if}
     </section>
-  {:else}
-    <ul class="pages">
-      {#each store.pages as p (p.id)}
-        <li><a href={`/editor?id=${p.id}`} aria-current={p.id === pageId ? 'page' : undefined}>{p.title}</a></li>
-      {/each}
-    </ul>
-    <a class="all" href="/editor?novo=1">{t('Nova página')}</a>
   {/if}
 </aside>
 
@@ -537,8 +528,7 @@
     color: var(--muted);
   }
 
-  .layers,
-  .pages {
+  .layers {
     list-style: none;
     margin: 0;
     padding: var(--s1);
@@ -792,25 +782,5 @@
   .gen-error {
     margin: 0;
     font-size: 12px;
-  }
-
-  .pages a {
-    display: block;
-    padding: 6px var(--s2);
-    border-radius: var(--r-sm);
-    text-decoration: none;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .pages a:hover,
-  .pages a[aria-current='page'] {
-    background: var(--card);
-  }
-
-  .all {
-    padding: var(--s2) var(--s3);
-    color: var(--muted);
   }
 </style>
