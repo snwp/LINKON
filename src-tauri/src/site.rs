@@ -120,14 +120,69 @@ fn site_dir(conn: &Connection, root: &Path, page_id: i64) -> Result<(String, Pat
 
 /// Grava o site da interface e devolve (caminho relativo com '/', pasta).
 pub fn write_site(conn: &Connection, library: &Path, root: &Path, page_id: i64, html: &str) -> Result<(String, PathBuf), String> {
+    write_site_pages(conn, library, root, page_id, html, &[])
+}
+
+/// Nome aceito para a página de um quadro extra: `[a-z0-9-]{1,60}.html`, nunca `index.html`.
+/// O nome vem do app, mas a pasta é escrita aqui: nada de barra, ponto ou `..` passa.
+pub fn valid_page_name(name: &str) -> bool {
+    name.strip_suffix(".html").is_some_and(|stem| {
+        !stem.is_empty()
+            && stem.len() <= 60
+            && stem != "index"
+            && stem.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+    })
+}
+
+/// Como `write_site`, mais uma página por quadro extra (`sobre.html`, ...). Páginas de quadros apagados saem da pasta.
+pub fn write_site_pages(
+    conn: &Connection,
+    library: &Path,
+    root: &Path,
+    page_id: i64,
+    html: &str,
+    extra: &[(String, String)],
+) -> Result<(String, PathBuf), String> {
+    if let Some((bad, _)) = extra.iter().find(|(n, _)| !valid_page_name(n)) {
+        return Err(format!("Nome de página inválido: {bad}"));
+    }
     let (rel, dir) = site_dir(conn, root, page_id)?;
     let assets = dir.join("assets");
     fs::create_dir_all(&assets).map_err(err)?;
     fs::write(dir.join(MARKER), "Pasta criada pelo Linkon. Ela é refeita sempre que a interface é salva.\n").map_err(err)?;
 
-    // Troca cada `linkon-file://<id>` pela imagem copiada para assets/.
-    let mut out = String::with_capacity(html.len());
     let mut used = HashSet::new();
+    let mut keep = HashSet::from(["index.html".to_string()]);
+    fs::write(dir.join("index.html"), localize(conn, library, &assets, html, &mut used)).map_err(err)?;
+    for (name, page) in extra {
+        fs::write(dir.join(name), localize(conn, library, &assets, page, &mut used)).map_err(err)?;
+        keep.insert(name.clone());
+    }
+
+    // Imagens e páginas que saíram da interface saem da pasta também (a pasta é do Linkon, ver MARKER).
+    if let Ok(list) = fs::read_dir(&assets) {
+        for e in list.flatten() {
+            if !used.contains(e.file_name().to_string_lossy().as_ref()) {
+                let _ = fs::remove_file(e.path());
+            }
+        }
+    }
+    if let Ok(list) = fs::read_dir(&dir) {
+        for e in list.flatten() {
+            let name = e.file_name().to_string_lossy().to_string();
+            if name.ends_with(".html") && !keep.contains(&name) && e.path().is_file() {
+                let _ = fs::remove_file(e.path());
+            }
+        }
+    }
+    fs::write(dir.join("fit.js"), FIT_JS).map_err(err)?;
+    fs::write(dir.join("vercel.json"), vercel_json()).map_err(err)?;
+    Ok((rel, dir))
+}
+
+/// Troca cada `linkon-file://<id>` pela imagem copiada para assets/ e anota em `used` o que foi usado.
+fn localize(conn: &Connection, library: &Path, assets: &Path, html: &str, used: &mut HashSet<String>) -> String {
+    let mut out = String::with_capacity(html.len());
     let mut rest = html;
     while let Some(pos) = rest.find(FILE_SCHEME) {
         out.push_str(&rest[..pos]);
@@ -152,19 +207,7 @@ pub fn write_site(conn: &Connection, library: &Path, root: &Path, page_id: i64, 
         rest = &after[digits..];
     }
     out.push_str(rest);
-
-    // Imagens que saíram da página saem da pasta também (a pasta é do Linkon, ver MARKER).
-    if let Ok(list) = fs::read_dir(&assets) {
-        for e in list.flatten() {
-            if !used.contains(e.file_name().to_string_lossy().as_ref()) {
-                let _ = fs::remove_file(e.path());
-            }
-        }
-    }
-    fs::write(dir.join("index.html"), out).map_err(err)?;
-    fs::write(dir.join("fit.js"), FIT_JS).map_err(err)?;
-    fs::write(dir.join("vercel.json"), vercel_json()).map_err(err)?;
-    Ok((rel, dir))
+    out
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -335,6 +378,15 @@ mod tests {
 
         let _ = fs::remove_dir_all(&lib);
         let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn page_names_cannot_escape_the_folder() {
+        assert!(valid_page_name("sobre.html"));
+        assert!(valid_page_name("fale-conosco-2.html"));
+        for bad in ["index.html", "../x.html", "a/b.html", "Sobre.html", ".html", "x.htm", "a.b.html"] {
+            assert!(!valid_page_name(bad), "{bad}");
+        }
     }
 
     #[test]

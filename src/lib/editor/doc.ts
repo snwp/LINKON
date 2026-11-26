@@ -47,7 +47,49 @@ export type Doc = {
   elements: El[];
   /** Versão mobile da página (390 px). Só existe no documento principal. */
   mobile?: Doc;
+  /** Quadros extras: outras telas do mesmo site (Sobre, Pesquisar...). Só existem no documento principal. */
+  frames?: Frame[];
 };
+
+/**
+ * Um quadro é uma tela do site. O nome define o arquivo (Sobre → sobre.html); x e y são a posição no canvas,
+ * em px de página, com o quadro principal em 0,0. Links apontam para um quadro com `quadro:<id>`.
+ */
+export type Frame = Doc & { id: string; name: string; x: number; y: number };
+
+export const FRAME_LINK = 'quadro:';
+/** Id que um link usa para voltar ao quadro principal. */
+export const MAIN_FRAME = 'principal';
+
+function slug(name: string): string {
+  return (
+    name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 50) || 'quadro'
+  );
+}
+
+/** Arquivo de cada quadro extra no site: nome do quadro sem acento, único, nunca index. */
+export function frameFiles(root: Doc): Map<string, string> {
+  const files = new Map<string, string>();
+  const taken = new Set(['index']);
+  for (const f of root.frames ?? []) {
+    const base = slug(f.name);
+    let name = base;
+    for (let i = 2; taken.has(name); i++) name = `${base}-${i}`;
+    taken.add(name);
+    files.set(f.id, `${name}.html`);
+  }
+  return files;
+}
+
+export function newFrame(root: Doc, x: number, y: number, name: string): Frame {
+  return { version: 1, id: newId(), name, x: Math.round(x), y: Math.round(y), width: root.width, height: 900, background: '#ffffff', elements: [] };
+}
 
 export const TYPE_LABELS: Record<ElementType, string> = {
   texto: 'Texto',
@@ -152,6 +194,7 @@ function readFrame(d: Partial<Doc>, defaults: Doc): Doc {
     height: finite(d.height, defaults.height),
     background: typeof d.background === 'string' && HEX.test(d.background) ? d.background : defaults.background,
     mobile: undefined,
+    frames: undefined,
     elements: (d.elements as El[]).filter((e) => e && typeof e === 'object').map(cleanEl),
   };
 }
@@ -163,6 +206,18 @@ export function parseDoc(json: string): Doc {
     if (!Array.isArray(d.elements)) return emptyDoc();
     const doc = readFrame(d, emptyDoc());
     if (d.mobile && Array.isArray(d.mobile.elements)) doc.mobile = readFrame(d.mobile, { ...emptyDoc(), width: 390, height: 844 });
+    if (Array.isArray(d.frames)) {
+      const frames = d.frames
+        .filter((f: Partial<Frame>) => f && typeof f === 'object' && Array.isArray(f.elements) && typeof f.id === 'string')
+        .map((f: Partial<Frame>) => ({
+          ...readFrame(f, { ...emptyDoc(), height: 900 }),
+          id: String(f.id).slice(0, 40),
+          name: typeof f.name === 'string' && f.name.trim() ? f.name.trim().slice(0, 60) : 'Quadro',
+          x: finite(f.x, 0),
+          y: finite(f.y, 0),
+        }));
+      if (frames.length) doc.frames = frames;
+    }
     return doc;
   } catch {
     return emptyDoc();

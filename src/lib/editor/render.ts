@@ -1,4 +1,4 @@
-import { elementStyle, safeHref, type Doc, type El } from './doc';
+import { elementStyle, safeHref, FRAME_LINK, MAIN_FRAME, type Doc, type El } from './doc';
 import { BREAKPOINT } from './layouts';
 
 export type RenderOptions = {
@@ -14,6 +14,8 @@ export type RenderOptions = {
   fitScript: boolean | 'file';
   /** @font-face das fontes usadas (ver fonts.ts). */
   fontCss?: string;
+  /** Arquivo de cada quadro (id → `sobre.html`), para links `quadro:<id>`. Sem isso, viram `#`. */
+  frames?: Map<string, string>;
 };
 
 const esc = (s: string) =>
@@ -36,6 +38,11 @@ function renderElement(e: El, o: RenderOptions): string {
       if (!e.fileId) return `<div class="el" style="${style}"></div>`;
       return `<img class="el" src="${esc(o.src(e.fileId))}" alt="${esc(e.name)}" style="${style};object-fit:${e.fit === 'contain' ? 'contain' : 'cover'}">`;
     case 'link':
+      if (e.href?.startsWith(FRAME_LINK)) {
+        const id = e.href.slice(FRAME_LINK.length);
+        const file = id === MAIN_FRAME ? 'index.html' : o.frames?.get(id) ?? '#';
+        return `<a class="el" href="${esc(file)}" style="${style}">${esc(e.text ?? '')}</a>`;
+      }
       return `<a class="el" href="${esc(safeHref(e.href))}" target="_blank" rel="noopener" style="${style}">${esc(e.text ?? '')}</a>`;
     case 'referencia': {
       if (!e.ref) return `<div class="el" style="${style}"></div>`;

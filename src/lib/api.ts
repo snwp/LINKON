@@ -111,13 +111,13 @@ type Api = {
   aiCancel(runId: string): Promise<void>;
 
   /** Grava o site da interface em Documentos/Linkon. Devolve a pasta relativa ("pasta/interface"). */
-  syncSite(pageId: number, html: string): Promise<string>;
+  syncSite(pageId: number, html: string, pages?: [string, string][]): Promise<string>;
   /** Grava o site, sobe o servidor local e abre no navegador. Devolve o endereço. */
-  openInBrowser(pageId: number, html: string): Promise<string>;
+  openInBrowser(pageId: number, html: string, pages?: [string, string][]): Promise<string>;
   sitesFolder(): Promise<string>;
   openSitesFolder(): Promise<string>;
   /** Grava o site e faz a revisão de segurança, para a confirmação antes de publicar. */
-  preparePublish(pageId: number, html: string): Promise<PublishCheck>;
+  preparePublish(pageId: number, html: string, pages?: [string, string][]): Promise<PublishCheck>;
   /** Publica na Vercel (produção). Devolve o endereço do site. */
   publishSite(pageId: number): Promise<string>;
   openPublished(url: string): Promise<void>;
@@ -235,11 +235,11 @@ const tauriApi: Api = {
   },
   aiCancel: (runId) => invoke('ai_cancel', { runId }),
 
-  syncSite: (pageId, html) => invoke('sync_site', { pageId, html }),
-  openInBrowser: (pageId, html) => invoke('open_in_browser', { pageId, html }),
+  syncSite: (pageId, html, pages) => invoke('sync_site', { pageId, html, pages }),
+  openInBrowser: (pageId, html, pages) => invoke('open_in_browser', { pageId, html, pages }),
   sitesFolder: () => invoke('sites_folder'),
   openSitesFolder: () => invoke('open_sites_folder'),
-  preparePublish: (pageId, html) => invoke('prepare_publish', { pageId, html }),
+  preparePublish: (pageId, html, pages) => invoke('prepare_publish', { pageId, html, pages }),
   publishSite: (pageId) => invoke('publish_site', { pageId }),
   openPublished: (url) => invoke('open_published', { url }),
   vercelStatus: () => invoke('vercel_status'),

@@ -4,7 +4,7 @@
    * Mostra só o que o tipo precisa. Cada mudança é confirmada com `commit` (um passo de desfazer).
    */
   import { AlignLeft, AlignCenter, AlignRight, Bold, Copy, Trash2, Link2 } from '@lucide/svelte';
-  import type { El } from './doc';
+  import { FRAME_LINK, type El } from './doc';
   import { t } from '$lib/i18n.svelte';
 
   type Props = {
@@ -13,8 +13,13 @@
     commit: () => void;
     duplicate: () => void;
     remove: () => void;
+    /** Quadros do site, para um link levar a outra tela. Vazio no mobile e quando só há a página inicial. */
+    frames?: { id: string; name: string }[];
   };
-  let { el, zoom, commit, duplicate, remove }: Props = $props();
+  let { el, zoom, commit, duplicate, remove, frames = [] }: Props = $props();
+
+  // Destino do link: um quadro (`quadro:<id>`) ou um endereço externo ('').
+  let target = $derived(el.href?.startsWith(FRAME_LINK) ? el.href.slice(FRAME_LINK.length) : '');
 
   const ALIGNS = [
     ['left', AlignLeft, 'Alinhar à esquerda'],
@@ -99,6 +104,25 @@
 
   {#if el.type === 'link'}
     <span class="sep"></span>
+    {#if frames.length > 1}
+      <label class="url" data-tip={t('Para onde o link leva')}>
+        <span class="visually-hidden">{t('Para onde o link leva')}</span>
+        <select
+          value={target}
+          onchange={(e) => {
+            const v = e.currentTarget.value;
+            el.href = v ? FRAME_LINK + v : 'https://';
+            commit();
+          }}
+        >
+          <option value="">{t('Endereço externo')}</option>
+          {#each frames as f (f.id)}
+            <option value={f.id}>{f.name}</option>
+          {/each}
+        </select>
+      </label>
+    {/if}
+    {#if !target}
     <label class="url" data-tip={t('Endereço do link')}>
       <Link2 size={13} aria-hidden="true" />
       <span class="visually-hidden">{t('Endereço do link')}</span>
@@ -112,6 +136,7 @@
         }}
       />
     </label>
+    {/if}
   {/if}
 
   {#if el.type === 'imagem'}
@@ -188,6 +213,15 @@
     background: transparent;
     color: var(--fg);
     font: 500 12px var(--font-mono);
+    outline: none;
+  }
+
+  .url select {
+    max-width: 160px;
+    border: 0;
+    background: transparent;
+    color: var(--fg);
+    font: 500 12px var(--font-ui);
     outline: none;
   }
 

@@ -3,7 +3,7 @@
   import { page } from '$app/state';
   import { PenLine, Globe, Rocket, Monitor, Smartphone, ExternalLink, TriangleAlert, CircleX } from '@lucide/svelte';
   import { api, message, type PublishCheck } from '$lib/api';
-  import { siteHtml } from '$lib/site';
+  import { siteHtml, sitePages } from '$lib/site';
   import { store, notify } from '$lib/store.svelte';
   import { parseDoc } from '$lib/editor/doc';
   import { renderHtml } from '$lib/editor/render';
@@ -59,7 +59,7 @@
     if (!current || !doc || busy) return;
     busy = 'browser';
     try {
-      await api.openInBrowser(current.id, await siteHtml(current.title, doc));
+      await api.openInBrowser(current.id, await siteHtml(current.title, doc), await sitePages(current.title, doc));
     } catch (e) {
       store.error = `${t('Não foi possível abrir no navegador.')} ${message(e)}`;
     } finally {
@@ -78,7 +78,7 @@
     busy = 'review';
     published = '';
     try {
-      check = await api.preparePublish(current.id, await siteHtml(current.title, doc));
+      check = await api.preparePublish(current.id, await siteHtml(current.title, doc), await sitePages(current.title, doc));
     } catch (e) {
       store.error = `${t('A revisão antes de publicar falhou.')} ${message(e)}`;
     } finally {

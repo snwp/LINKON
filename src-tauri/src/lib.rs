@@ -169,20 +169,21 @@ fn sites_root(app: &AppHandle) -> Result<PathBuf, String> {
 
 /// Grava o site da interface (chamado depois de cada salvamento). Devolve o caminho relativo.
 #[tauri::command]
-async fn sync_site(app: AppHandle, page_id: i64, html: String) -> Result<String, String> {
+async fn sync_site(app: AppHandle, page_id: i64, html: String, pages: Option<Vec<(String, String)>>) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let root = sites_root(&app)?;
         let state = app.state::<AppDb>();
-        state.with(|c| site::write_site(c, &state.library, &root, page_id, &html)).map(|(rel, _)| rel)
+        let pages = pages.unwrap_or_default();
+        state.with(|c| site::write_site_pages(c, &state.library, &root, page_id, &html, &pages)).map(|(rel, _)| rel)
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-async fn open_in_browser(app: AppHandle, page_id: i64, html: String) -> Result<String, String> {
+async fn open_in_browser(app: AppHandle, page_id: i64, html: String, pages: Option<Vec<(String, String)>>) -> Result<String, String> {
     use tauri_plugin_opener::OpenerExt;
-    let rel = sync_site(app.clone(), page_id, html).await?;
+    let rel = sync_site(app.clone(), page_id, html, pages).await?;
     let port = app.state::<serve::LocalServer>().port(sites_root(&app)?)?;
     let url = format!("http://127.0.0.1:{port}/{rel}/");
     app.opener().open_url(&url, None::<&str>).map_err(|e| format!("Não foi possível abrir o navegador ({e})."))?;
@@ -223,12 +224,18 @@ fn site_rel(state: &AppDb, page_id: i64) -> Result<String, String> {
 
 /// Grava o site e faz a revisão de segurança; o resultado vai para a confirmação antes de publicar.
 #[tauri::command]
-async fn prepare_publish(app: AppHandle, page_id: i64, html: String) -> Result<PublishCheck, String> {
-    let rel = sync_site(app.clone(), page_id, html).await?;
+async fn prepare_publish(app: AppHandle, page_id: i64, html: String, pages: Option<Vec<(String, String)>>) -> Result<PublishCheck, String> {
+    let names: Vec<String> = pages.iter().flatten().map(|(n, _)| n.clone()).collect();
+    let rel = sync_site(app.clone(), page_id, html, pages).await?;
     let root = sites_root(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
-        let index = std::fs::read_to_string(root.join(&rel).join("index.html")).map_err(|e| e.to_string())?;
-        Ok(PublishCheck { name: publish::project_name(&rel), findings: site::audit(&index), vercel: publish::status() })
+        // Revisa todas as páginas do site, não só a principal.
+        let mut findings = Vec::new();
+        for name in std::iter::once("index.html".to_string()).chain(names) {
+            let html = std::fs::read_to_string(root.join(&rel).join(&name)).map_err(|e| e.to_string())?;
+            findings.extend(site::audit(&html));
+        }
+        Ok(PublishCheck { name: publish::project_name(&rel), findings, vercel: publish::status() })
     })
     .await
     .map_err(|e| e.to_string())?
@@ -241,9 +248,15 @@ async fn publish_site(app: AppHandle, page_id: i64) -> Result<String, String> {
         let state = app.state::<AppDb>();
         let rel = site_rel(&state, page_id)?;
         let dir = rel.split('/').fold(sites_root(&app)?, |p, s| p.join(s));
-        let index = std::fs::read_to_string(dir.join("index.html")).map_err(|e| e.to_string())?;
-        if let Some(f) = site::audit(&index).into_iter().find(|f| f.level == "erro") {
-            return Err(format!("Publicação bloqueada pela revisão de segurança: {}", f.text));
+        // Toda página .html da pasta (a principal e as dos quadros) passa pela revisão.
+        for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())?.flatten() {
+            if !entry.file_name().to_string_lossy().ends_with(".html") {
+                continue;
+            }
+            let html = std::fs::read_to_string(entry.path()).map_err(|e| e.to_string())?;
+            if let Some(f) = site::audit(&html).into_iter().find(|f| f.level == "erro") {
+                return Err(format!("Publicação bloqueada pela revisão de segurança: {}", f.text));
+            }
         }
         publish::deploy(&state.dir, &dir, &publish::project_name(&rel))
     })

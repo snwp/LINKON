@@ -4,13 +4,14 @@
   import { SvelteSet } from 'svelte/reactivity';
   import { goto } from '$app/navigation';
   import { page as route } from '$app/state';
-  import { ArrowLeft, Undo2, Redo2, Minus, Plus, Eye, Monitor, Smartphone, Trash2, PanelLeftOpen, PanelRightOpen } from '@lucide/svelte';
+  import { ArrowLeft, Undo2, Redo2, Minus, Plus, Eye, Monitor, Smartphone, Trash2, PanelLeftOpen, PanelRightOpen, SquarePlus, Pencil } from '@lucide/svelte';
+  import { openMenu } from '$lib/menu.svelte';
   import { toMobile } from './layouts';
   import { api, message, type Page } from '$lib/api';
   import { store, reload, notify } from '$lib/store.svelte';
   import { background, aiLogs, getAiNotify } from './background.svelte';
   import { registerFlush } from '$lib/pending';
-  import { siteHtml } from '$lib/site';
+  import { siteHtml, sitePages } from '$lib/site';
   import {
     createElement,
     elementStyle,
@@ -19,7 +20,10 @@
     resizeRect,
     snapMove,
     HANDLES,
+    newFrame,
+    MAIN_FRAME,
     type Doc,
+    type Frame,
     type El,
     type ElementType,
     type Handle,
@@ -65,7 +69,11 @@
     // svelte-ignore state_referenced_locally
     route.url.searchParams.get('v') === 'mobile' && root.mobile ? 'mobile' : 'desktop',
   );
-  let doc = $derived(view === 'mobile' && root.mobile ? root.mobile : root);
+  /** Quadro em edição (null = o principal). Os outros quadros aparecem no canvas, só para ver e trocar. */
+  let frameId = $state<string | null>(null);
+  let doc = $derived<Doc>(
+    view === 'mobile' && root.mobile ? root.mobile : (frameId && root.frames?.find((f) => f.id === frameId)) || root,
+  );
   let selectedId = $state<string | null>(null);
   let editingId = $state<string | null>(null);
   let zoom = $state(0.75);
@@ -102,6 +110,7 @@
     snapshot = json;
     root = parseDoc(json);
     if (!root.mobile) view = 'desktop';
+    if (frameId && !root.frames?.some((f) => f.id === frameId)) frameId = null;
     if (!doc.elements.some((e) => e.id === selectedId)) selectedId = null;
     editingId = null;
     syncHistoryFlags();
@@ -154,8 +163,9 @@
       status = dirty ? 'pending' : 'saved';
       reload();
       // O site em Documentos/Linkon acompanha cada salvamento; falhar aqui não desfaz o salvamento.
-      siteHtml(savedTitle, parseDoc(savedDoc))
-        .then((html) => api.syncSite(page.id, html))
+      const saved = parseDoc(savedDoc);
+      Promise.all([siteHtml(savedTitle, saved), sitePages(savedTitle, saved)])
+        .then(([html, pages]) => api.syncSite(page.id, html, pages))
         .catch((e) => (store.error = `${t('A pasta do site não foi atualizada.')} ${message(e)}`));
     } catch (e) {
       dirty = true;
@@ -207,7 +217,7 @@
       commit();
       return;
     }
-    const top = stage ? stage.scrollTop / zoom : 0;
+    const top = stage && pageEl ? (stage.getBoundingClientRect().top - pageEl.getBoundingClientRect().top) / zoom : 0;
     const probe = createElement(type, doc, 0, 0, extra);
     const x = type === 'secao' ? 0 : Math.max(0, Math.round((doc.width - probe.w) / 2));
     const y = Math.max(0, Math.round(top + 80));
@@ -326,6 +336,15 @@
   }
 
   function onpointermove(e: PointerEvent) {
+    if (frameDrag) {
+      const dx = (e.clientX - frameDrag.startX) / zoom;
+      const dy = (e.clientY - frameDrag.startY) / zoom;
+      if (!frameDrag.moved && Math.abs(dx) + Math.abs(dy) < 2) return;
+      frameDrag.moved = true;
+      frameDrag.f.x = Math.round(frameDrag.x + dx);
+      frameDrag.f.y = Math.round(frameDrag.y + dy);
+      return;
+    }
     if (!drag) return;
     const el = doc.elements.find((x) => x.id === drag!.id);
     if (!el) return;
@@ -350,6 +369,11 @@
   }
 
   function onpointerup() {
+    if (frameDrag) {
+      if (frameDrag.moved) commit();
+      frameDrag = null;
+      return;
+    }
     if (drag?.moved) commit();
     // Segundo clique num texto já selecionado, sem arrastar: entra na edição.
     else if (drag && drag.wasSelected && !drag.handle) {
@@ -395,11 +419,12 @@
     commit();
     if (v === 'mobile' && !root.mobile) {
       // Primeira vez: a versão mobile nasce da desktop e entra no histórico como um passo.
-      root.mobile = toMobile($state.snapshot(root) as Doc);
+      root.mobile = { ...toMobile($state.snapshot(root) as Doc), frames: undefined };
       commit();
     }
     selectedId = null;
     editingId = null;
+    frameId = null;
     view = v;
     await tick();
     fit();
@@ -419,18 +444,211 @@
     zoom = Math.min(2, Math.max(0.25, Math.round(z * 100) / 100));
   }
 
-  function fit() {
-    if (stage) setZoom(Math.min(1, (stage.clientWidth - 96) / doc.width));
+  /** Ajusta o zoom à largura do quadro ativo e o traz para o meio da tela. */
+  async function fit() {
+    if (!stage) return;
+    setZoom(Math.min(1, (stage.clientWidth - 96) / doc.width));
+    await tick();
+    reveal();
   }
 
+  /** Rola até o quadro ativo: centrado na largura, com o topo à vista. */
+  function reveal() {
+    if (!stage || !pageEl) return;
+    const s = stage.getBoundingClientRect();
+    const p = pageEl.getBoundingClientRect();
+    stage.scrollLeft += p.left + p.width / 2 - (s.left + s.width / 2);
+    stage.scrollTop += p.top - s.top - 48;
+  }
+
+  // A rodinha aproxima e afasta, mantendo parado o ponto embaixo do cursor. Mover a tela fica com o botão da rodinha.
   function wheel(node: HTMLElement) {
     const handler = (e: WheelEvent) => {
-      if (!e.ctrlKey) return;
+      if (!boardEl) return;
       e.preventDefault();
+      const before = zoom;
+      const b = boardEl.getBoundingClientRect();
+      const bx = (e.clientX - b.left) / before;
+      const by = (e.clientY - b.top) / before;
       setZoom(zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1));
+      if (zoom === before) return;
+      tick().then(() => {
+        const a = boardEl!.getBoundingClientRect();
+        node.scrollLeft += a.left + bx * zoom - e.clientX;
+        node.scrollTop += a.top + by * zoom - e.clientY;
+      });
     };
     node.addEventListener('wheel', handler, { passive: false });
     return { destroy: () => node.removeEventListener('wheel', handler) };
+  }
+
+  // Segurar o botão da rodinha e arrastar move a tela, como em ferramentas de desenho.
+  function pan(node: HTMLElement) {
+    const down = (e: PointerEvent) => {
+      if (e.button !== 1) return;
+      e.preventDefault(); // sem isso o Windows liga a rolagem automática da rodinha
+      e.stopPropagation();
+      const sx = e.clientX, sy = e.clientY, left = node.scrollLeft, top = node.scrollTop;
+      try {
+        node.setPointerCapture(e.pointerId);
+      } catch {
+        // Sem um ponteiro ativo (evento sintético), segue sem captura.
+      }
+      node.classList.add('panning');
+      const move = (m: PointerEvent) => {
+        node.scrollLeft = left - (m.clientX - sx);
+        node.scrollTop = top - (m.clientY - sy);
+      };
+      const up = () => {
+        node.classList.remove('panning');
+        node.removeEventListener('pointermove', move);
+        node.removeEventListener('pointerup', up);
+        node.removeEventListener('pointercancel', up);
+      };
+      node.addEventListener('pointermove', move);
+      node.addEventListener('pointerup', up);
+      node.addEventListener('pointercancel', up);
+    };
+    // Captura: o arraste da rodinha não deve selecionar nem mover elementos embaixo do cursor.
+    node.addEventListener('pointerdown', down, true);
+    // O clique do meio num link abriria uma aba nova.
+    // e o mousedown do meio liga a rolagem automática do Chromium (WebView2).
+    const aux = (e: MouseEvent) => e.button === 1 && e.preventDefault();
+    node.addEventListener('auxclick', aux);
+    node.addEventListener('mousedown', aux);
+    return {
+      destroy: () => {
+        node.removeEventListener('pointerdown', down, true);
+        node.removeEventListener('auxclick', aux);
+        node.removeEventListener('mousedown', aux);
+      },
+    };
+  }
+
+  // ---------- quadros ----------
+  /** Folga em volta dos quadros, em px de página: espaço para mover a tela e criar quadros novos. */
+  const ROOM = 2400;
+  const MAIN = MAIN_FRAME;
+  let boardEl: HTMLDivElement | undefined = $state();
+  let renamingId = $state<string | null>(null);
+
+  type Slot = { id: string; name: string; x: number; y: number; d: Doc; frame: Frame | null };
+  /** Tudo que aparece no canvas. No mobile, só a versão mobile; no desktop, o principal e os quadros extras. */
+  let slots = $derived<Slot[]>(
+    view === 'mobile' && root.mobile
+      ? [{ id: MAIN, name: '', x: 0, y: 0, d: root.mobile, frame: null }]
+      : [
+          { id: MAIN, name: t('Página inicial'), x: 0, y: 0, d: root, frame: null },
+          ...(root.frames ?? []).map((f) => ({ id: f.id, name: f.name, x: f.x, y: f.y, d: f as Doc, frame: f })),
+        ],
+  );
+  let activeId = $derived(view === 'mobile' ? MAIN : (frameId ?? MAIN));
+  let board = $derived.by(() => {
+    const minX = Math.min(...slots.map((f) => f.x)) - ROOM;
+    const minY = Math.min(...slots.map((f) => f.y)) - ROOM;
+    const maxX = Math.max(...slots.map((f) => f.x + f.d.width)) + ROOM;
+    const maxY = Math.max(...slots.map((f) => f.y + f.d.height)) + ROOM;
+    return { minX, minY, w: maxX - minX, h: maxY - minY };
+  });
+
+  // Um quadro criado ou arrastado além da borda muda a origem do canvas: compensa a rolagem para nada pular.
+  let lastOrigin: { x: number; y: number } | null = null;
+  $effect.pre(() => {
+    const o = { x: board.minX, y: board.minY };
+    const z = zoom;
+    if (stage && lastOrigin) {
+      const dx = (lastOrigin.x - o.x) * z;
+      const dy = (lastOrigin.y - o.y) * z;
+      if (dx || dy) tick().then(() => stage && ((stage.scrollLeft += dx), (stage.scrollTop += dy)));
+    }
+    lastOrigin = o;
+  });
+
+  const slotStyle = (f: Slot) =>
+    `left:${(f.x - board.minX) * zoom}px;top:${(f.y - board.minY) * zoom}px;width:${f.d.width * zoom}px;height:${f.d.height * zoom}px`;
+
+  async function activate(id: string) {
+    if (id === activeId) return;
+    commit();
+    selectedId = null;
+    editingId = null;
+    frameId = id === MAIN ? null : id;
+  }
+
+  /** Botão direito no espaço vazio: criar um quadro ali. */
+  function boardMenu(e: MouseEvent) {
+    if (view === 'mobile' || !boardEl || aiRun) return;
+    e.preventDefault();
+    const b = boardEl.getBoundingClientRect();
+    const x = (e.clientX - b.left) / zoom + board.minX;
+    const y = (e.clientY - b.top) / zoom + board.minY;
+    openMenu(e, [{ label: t('Criar quadro'), icon: SquarePlus, run: () => createFrame(x, y) }]);
+  }
+
+  function createFrame(x: number, y: number) {
+    commit();
+    const n = (root.frames?.length ?? 0) + 2;
+    const f = newFrame(root, x, y, t('Quadro {n}', { n }));
+    // Nunca nasce por cima de outro quadro: anda para a direita até achar espaço livre.
+    const GAP = 160;
+    for (let hit = true; hit; ) {
+      hit = false;
+      for (const o of slots) {
+        if (f.x < o.x + o.d.width + GAP && f.x + f.width + GAP > o.x && f.y < o.y + o.d.height + GAP && f.y + f.height + GAP > o.y) {
+          f.x = o.x + o.d.width + GAP;
+          hit = true;
+        }
+      }
+    }
+    root.frames = [...(root.frames ?? []), f];
+    selectedId = null;
+    frameId = f.id;
+    commit();
+    // Nasce pedindo o nome: é ele que diz que tela do site o quadro é (Sobre vira sobre.html).
+    renamingId = f.id;
+    tick().then(reveal);
+  }
+
+  function frameMenu(e: MouseEvent, f: Slot) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!f.frame || aiRun) return;
+    openMenu(e, [
+      { label: t('Renomear quadro'), icon: Pencil, run: () => (renamingId = f.id) },
+      { separator: true },
+      { label: t('Excluir quadro'), icon: Trash2, run: () => removeFrame(f.id) },
+    ]);
+  }
+
+  function removeFrame(id: string) {
+    commit();
+    root.frames = root.frames?.filter((f) => f.id !== id);
+    if (!root.frames?.length) root.frames = undefined;
+    if (frameId === id) frameId = null;
+    selectedId = null;
+    commit();
+  }
+
+  function rename(f: Frame, value: string) {
+    const name = value.trim().slice(0, 60);
+    if (name) f.name = name;
+    renamingId = null;
+    commit();
+  }
+
+  /** Arrastar o nome de um quadro extra move o quadro. */
+  let frameDrag: { f: Frame; startX: number; startY: number; x: number; y: number; moved: boolean } | null = null;
+
+  function startFrameDrag(e: PointerEvent, f: Slot) {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    activate(f.id);
+    if (f.frame) frameDrag = { f: f.frame, startX: e.clientX, startY: e.clientY, x: f.frame.x, y: f.frame.y, moved: false };
+  }
+
+  function focusSelect(node: HTMLInputElement) {
+    node.focus();
+    node.select();
   }
 
   // ---------- teclado ----------
@@ -678,84 +896,149 @@
     </div>
 
     <div class="stage-wrap">
-    <div class="stage" bind:this={stage} use:wheel onpointerdown={() => { selectedId = null; editingId = null; }} role="presentation">
+    <div class="stage" bind:this={stage} use:wheel use:pan onpointerdown={() => { selectedId = null; editingId = null; }} oncontextmenu={boardMenu} role="presentation">
       <!-- Trocar Desktop ↔ Mobile recria a página, e a nova entra suavemente (a que sai some na hora). -->
       {#key view}
-      <div class="sizer" in:frameIn style={`width:${doc.width * zoom}px;height:${doc.height * zoom}px`}>
-        <div
-          class="page"
-          bind:this={pageEl}
-          style={`width:${doc.width}px;height:${doc.height}px;background:${doc.background};transform:scale(${zoom});--z:${zoom}`}
-          oncontextmenu={(e) => openBubble(e, null)}
-          role="presentation"
-        >
-          {#each doc.elements as el (el.id)}
-            {#if !el.hidden}
+      <div class="sizer" bind:this={boardEl} in:frameIn style={`width:${board.w * zoom}px;height:${board.h * zoom}px`}>
+        {#each slots as f (f.id)}
+          <div class="slot-frame" class:active={f.id === activeId} style={slotStyle(f)}>
+            {#if f.name}
+              {#if renamingId === f.id && f.frame}
+                {@const fr = f.frame}
+                <input
+                  class="frame-name editing mono"
+                  value={fr.name}
+                  maxlength="60"
+                  aria-label={t('Nome do quadro')}
+                  use:focusSelect
+                  onpointerdown={(e) => e.stopPropagation()}
+                  onblur={(e) => rename(fr, e.currentTarget.value)}
+                  onkeydown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                    if (e.key === 'Escape') renamingId = null;
+                  }}
+                />
+              {:else}
+                <button
+                  class="frame-name mono"
+                  onpointerdown={(e) => startFrameDrag(e, f)}
+                  ondblclick={() => f.frame && (renamingId = f.id)}
+                  oncontextmenu={(e) => frameMenu(e, f)}
+                  data-tip={f.frame ? t('Arraste para mover. Clique duas vezes para renomear.') : undefined}
+                >{f.name}</button>
+              {/if}
+            {/if}
+            {#if f.id === activeId}
+            <div
+              class="page"
+              bind:this={pageEl}
+              style={`width:${doc.width}px;height:${doc.height}px;background:${doc.background};transform:scale(${zoom});--z:${zoom}`}
+              oncontextmenu={(e) => openBubble(e, null)}
+              role="presentation"
+            >
+              {#each doc.elements as el (el.id)}
+                {#if !el.hidden}
+                  <div
+                    class="el"
+                    data-id={el.id}
+                    class:editing={el.id === editingId}
+                    class:ai-target={aiRun?.markedId === el.id}
+                    class:ai-enter={aiEntering.has(el.id)}
+                    style={elementStyle(el)}
+                    onpointerdown={(e) => startDrag(e, el, null)}
+                    ondblclick={() => startEdit(el)}
+                    oncontextmenu={(e) => openBubble(e, el)}
+                    role="button"
+                    tabindex="-1"
+                    aria-label={el.name}
+                  >
+                    {#if el.type === 'imagem'}
+                      {@const src = fileSrc(el.fileId)}
+                      {#if src}
+                        <img {src} alt="" draggable="false" style={`object-fit:${el.fit ?? 'cover'}`} />
+                      {:else}
+                        <span class="placeholder">{t('Arraste uma imagem do painel Inserir para cá')}</span>
+                      {/if}
+                    {:else if el.type === 'referencia' && el.ref}
+                      {@const r = refInfo(el.ref)}
+                      <strong>{r.title}</strong>
+                      <span class="sub">{r.subtitle}</span>
+                    {:else if el.id === editingId}
+                      <div
+                        class="edit"
+                        contenteditable="plaintext-only"
+                        use:focusEdit
+                        onblur={(e) => endEdit(el, e.currentTarget)}
+                        onkeydown={(e) => e.key === 'Escape' && e.currentTarget.blur()}
+                        role="textbox"
+                        tabindex="0"
+                        aria-multiline="true"
+                      >{el.text ?? ''}</div>
+                    {:else}
+                      {el.text ?? ''}
+                    {/if}
+                  </div>
+                {/if}
+              {/each}
+
+              {#if selected && !selected.hidden && selected.id !== editingId}
+                <div
+                  class="selbox"
+                  style={`left:${selected.x}px;top:${selected.y}px;width:${selected.w}px;height:${selected.h}px;--z:${zoom}`}
+                >
+                  {#each HANDLES as h (h)}
+                    <span
+                      class={`handle ${h}`}
+                      onpointerdown={(e) => startDrag(e, selected!, h)}
+                      role="presentation"
+                    ></span>
+                  {/each}
+                  <span class="size mono">{selected.w} × {selected.h}</span>
+                </div>
+              {/if}
+
+              {#if guides.x !== null}<div class="guide v" style={`left:${guides.x}px;--z:${zoom}`}></div>{/if}
+              {#if guides.y !== null}<div class="guide h" style={`top:${guides.y}px;--z:${zoom}`}></div>{/if}
+            </div>
+              {#if selected && !selected.hidden && !moving}
+                <SelectionBar el={selected} {zoom} {commit} {duplicate} remove={removeSelected} frames={view === 'mobile' ? [] : slots.map((x) => ({ id: x.id, name: x.name }))} />
+              {/if}
+            {:else}
+              <!-- Quadro que não está em edição: só desenho. Um clique passa a editá-lo. -->
               <div
-                class="el"
-                data-id={el.id}
-                class:editing={el.id === editingId}
-                class:ai-target={aiRun?.markedId === el.id}
-                class:ai-enter={aiEntering.has(el.id)}
-                style={elementStyle(el)}
-                onpointerdown={(e) => startDrag(e, el, null)}
-                ondblclick={() => startEdit(el)}
-                oncontextmenu={(e) => openBubble(e, el)}
+                class="page still"
+                style={`width:${f.d.width}px;height:${f.d.height}px;background:${f.d.background};transform:scale(${zoom})`}
+                onpointerdown={(e) => {
+                  if (e.button !== 0) return;
+                  e.stopPropagation();
+                  activate(f.id);
+                }}
+                oncontextmenu={(e) => frameMenu(e, f)}
                 role="button"
                 tabindex="-1"
-                aria-label={el.name}
+                aria-label={t('Editar o quadro {name}', { name: f.name })}
               >
-                {#if el.type === 'imagem'}
-                  {@const src = fileSrc(el.fileId)}
-                  {#if src}
-                    <img {src} alt="" draggable="false" style={`object-fit:${el.fit ?? 'cover'}`} />
-                  {:else}
-                    <span class="placeholder">{t('Arraste uma imagem do painel Inserir para cá')}</span>
+                {#each f.d.elements as el (el.id)}
+                  {#if !el.hidden}
+                    <div class="el" style={elementStyle(el)}>
+                      {#if el.type === 'imagem'}
+                        {@const src = fileSrc(el.fileId)}
+                        {#if src}<img {src} alt="" draggable="false" style={`object-fit:${el.fit ?? 'cover'}`} />{/if}
+                      {:else if el.type === 'referencia' && el.ref}
+                        {@const r = refInfo(el.ref)}
+                        <strong>{r.title}</strong>
+                        <span class="sub">{r.subtitle}</span>
+                      {:else}
+                        {el.text ?? ''}
+                      {/if}
+                    </div>
                   {/if}
-                {:else if el.type === 'referencia' && el.ref}
-                  {@const r = refInfo(el.ref)}
-                  <strong>{r.title}</strong>
-                  <span class="sub">{r.subtitle}</span>
-                {:else if el.id === editingId}
-                  <div
-                    class="edit"
-                    contenteditable="plaintext-only"
-                    use:focusEdit
-                    onblur={(e) => endEdit(el, e.currentTarget)}
-                    onkeydown={(e) => e.key === 'Escape' && e.currentTarget.blur()}
-                    role="textbox"
-                    tabindex="0"
-                    aria-multiline="true"
-                  >{el.text ?? ''}</div>
-                {:else}
-                  {el.text ?? ''}
-                {/if}
+                {/each}
               </div>
             {/if}
-          {/each}
-
-          {#if selected && !selected.hidden && selected.id !== editingId}
-            <div
-              class="selbox"
-              style={`left:${selected.x}px;top:${selected.y}px;width:${selected.w}px;height:${selected.h}px;--z:${zoom}`}
-            >
-              {#each HANDLES as h (h)}
-                <span
-                  class={`handle ${h}`}
-                  onpointerdown={(e) => startDrag(e, selected!, h)}
-                  role="presentation"
-                ></span>
-              {/each}
-              <span class="size mono">{selected.w} × {selected.h}</span>
-            </div>
-          {/if}
-
-          {#if guides.x !== null}<div class="guide v" style={`left:${guides.x}px;--z:${zoom}`}></div>{/if}
-          {#if guides.y !== null}<div class="guide h" style={`top:${guides.y}px;--z:${zoom}`}></div>{/if}
-        </div>
-        {#if selected && !selected.hidden && !moving}
-          <SelectionBar el={selected} {zoom} {commit} {duplicate} remove={removeSelected} />
-        {/if}
+          </div>
+        {/each}
       </div>
       {/key}
     </div>
@@ -980,6 +1263,58 @@
     background: var(--bg);
     background-image: radial-gradient(var(--card) 1px, transparent 1px);
     background-size: 20px 20px;
+  }
+
+  .stage:global(.panning) {
+    cursor: grabbing;
+  }
+
+  .stage:global(.panning) * {
+    cursor: grabbing !important;
+  }
+
+  /* Cada quadro fica na sua posição do canvas; o nome vai logo acima, como em ferramentas de desenho. */
+  .slot-frame {
+    position: absolute;
+  }
+
+  .frame-name {
+    position: absolute;
+    left: 0;
+    bottom: 100%;
+    margin-bottom: 6px;
+    max-width: 100%;
+    padding: 2px 0;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: grab;
+  }
+
+  .slot-frame.active > .frame-name {
+    color: var(--fg);
+  }
+
+  .frame-name.editing {
+    width: 220px;
+    padding: 2px 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    background: var(--card);
+    color: var(--fg);
+    cursor: text;
+  }
+
+  .page.still {
+    cursor: pointer;
+  }
+
+  .page.still .el {
+    pointer-events: none;
   }
 
   .sizer {
