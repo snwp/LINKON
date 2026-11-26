@@ -14,6 +14,7 @@
   import { siteHtml, sitePages } from '$lib/site';
   import {
     createElement,
+    cleanScene,
     elementStyle,
     parseDoc,
     emptyImagesUnder,
@@ -27,10 +28,12 @@
     type Doc,
     type Frame,
     type El,
+    type Scene3D,
     type ElementType,
     type Handle,
   } from './doc';
   import { refInfo } from './refs';
+  import { ANIM_CSS, animAttrs } from '$lib/runtime/anim';
   import Panel from './Panel.svelte';
   import ClaudePanel from './ClaudePanel.svelte';
   import Linke from '$lib/Linke.svelte';
@@ -399,6 +402,41 @@
     editingId = el.id;
   }
 
+  /**
+   * Objeto 3D ao vivo, com o mesmo código do site. O runtime (e o three) só carrega quando há um objeto na página.
+   * O parâmetro leva o zoom junto: a resolução do desenho acompanha o tamanho que o elemento tem na tela.
+   */
+  function three(node: HTMLElement, p: { json: string; zoom: number }) {
+    let m: { update(s: Scene3D): void; destroy(): void } | undefined;
+    let dead = false;
+    let cur = p;
+    const scene = () => cleanScene(JSON.parse(cur.json));
+    import('$lib/runtime/scene3d').then((r) => {
+      if (!dead) m = r.mount3d(node, scene());
+    });
+    return {
+      update(next: { json: string; zoom: number }) {
+        cur = next;
+        m?.update(scene());
+      },
+      destroy() {
+        dead = true;
+        m?.destroy();
+      },
+    };
+  }
+
+  /** Refaz a entrada quando a animação do elemento muda (a CSS só recomeça sozinha se o nome do efeito mudar). */
+  function replay(node: HTMLElement, _anim: string) {
+    return {
+      update() {
+        node.style.animation = 'none';
+        void node.offsetWidth;
+        node.style.animation = '';
+      },
+    };
+  }
+
   function focusEdit(node: HTMLElement) {
     node.focus();
     const range = document.createRange();
@@ -753,6 +791,8 @@
       point,
       images: images.slice(0, 60).map((f) => ({ id: f.id, name: f.name })),
       recent: recentRequests,
+      // Sem as bases (falha ao ler o banco), o pedido segue sem referência.
+      bases: (await api.listBases().catch(() => [])).map((b) => ({ url: b.url, summary: b.summary })),
     });
 
     const runId = Math.random().toString(36).slice(2, 10);
@@ -937,13 +977,15 @@
             >
               {#each doc.elements as el (el.id)}
                 {#if !el.hidden}
+                  {@const a = animAttrs(el, true)}
                   <div
-                    class="el"
+                    class={`el${a.cls}`}
+                    use:replay={JSON.stringify(el.anim ?? null)}
                     data-id={el.id}
                     class:editing={el.id === editingId}
                     class:ai-target={aiRun?.markedId === el.id}
                     class:ai-enter={aiEntering.has(el.id)}
-                    style={elementStyle(el)}
+                    style={elementStyle(el) + a.style}
                     onpointerdown={(e) => startDrag(e, el, null)}
                     ondblclick={() => startEdit(el)}
                     oncontextmenu={(e) => openBubble(e, el)}
@@ -962,6 +1004,8 @@
                       {@const r = refInfo(el.ref)}
                       <strong>{r.title}</strong>
                       <span class="sub">{r.subtitle}</span>
+                    {:else if el.type === 'objeto3d' && el.scene}
+                      <div class="three" use:three={{ json: JSON.stringify(el.scene), zoom }}></div>
                     {:else if el.id === editingId}
                       <div
                         class="edit"
@@ -1015,8 +1059,11 @@
               >
                 {#each f.d.elements as el (el.id)}
                   {#if !el.hidden}
-                    <div class="el" style={elementStyle(el)}>
-                      {#if el.type === 'imagem'}
+                    {@const a = animAttrs(el, true)}
+                    <div class={`el${a.cls}`} style={elementStyle(el) + a.style}>
+                      {#if el.type === 'objeto3d' && el.scene}
+                        <div class="three" use:three={{ json: JSON.stringify(el.scene), zoom }}></div>
+                      {:else if el.type === 'imagem'}
                         {@const src = fileSrc(el.fileId)}
                         {#if src}<img {src} alt="" draggable="false" style={`object-fit:${el.fit ?? 'cover'}`} />{/if}
                       {:else if el.type === 'referencia' && el.ref}
@@ -1066,6 +1113,8 @@
   </div>
 
 </div>
+
+<svelte:head>{@html `<style>${ANIM_CSS}</style>`}</svelte:head>
 
 <style>
   .editor {
@@ -1356,6 +1405,11 @@
     cursor: text;
     outline: calc(1.5px / var(--z, 1)) dashed #fff;
     box-shadow: 0 0 0 calc(3px / var(--z, 1)) #000;
+  }
+
+  .three {
+    position: absolute;
+    inset: 0;
   }
 
   .el img {

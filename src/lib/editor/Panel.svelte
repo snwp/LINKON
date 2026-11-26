@@ -1,11 +1,11 @@
 <script lang="ts">
   import { flip } from 'svelte/animate';
   import { slidingPill, FLIP } from '$lib/motion';
-  import { Eye, EyeOff, Type, Square, PanelTop, Link2, Image, StickyNote, Upload, PanelLeftClose, ImagePlus } from '@lucide/svelte';
+  import { Eye, EyeOff, Type, Square, PanelTop, Link2, Image, StickyNote, Upload, PanelLeftClose, ImagePlus, Box } from '@lucide/svelte';
   import { store, addFiles, reload, notify } from '$lib/store.svelte';
   import { api, message, type ImageRequest } from '$lib/api';
   import { SHAPES, getImagePrefs } from '$lib/imagegen';
-  import { TYPE_LABELS, type Doc, type ElementType, type El } from './doc';
+  import { TYPE_LABELS, ANIM_IN, ANIM_HOVER, ANIM_LOOP, SHAPES_3D, MATERIALS_3D, LIGHTS_3D, DEFAULT_SCENE, cleanAnim, cleanScene, type Doc, type ElementType, type El, type Anim, type Scene3D } from './doc';
   import { t } from '$lib/i18n.svelte';
 
   type Props = {
@@ -59,8 +59,39 @@
 
   let tab = $state<'camadas' | 'inserir' | 'paginas'>('camadas');
 
-  const ICON = { texto: Type, bloco: Square, secao: PanelTop, link: Link2, imagem: Image, referencia: StickyNote };
-  const BASIC: ElementType[] = ['texto', 'bloco', 'secao', 'link'];
+  const ICON: Record<ElementType, typeof Type> = { texto: Type, bloco: Square, secao: PanelTop, link: Link2, imagem: Image, referencia: StickyNote, objeto3d: Box };
+  const BASIC: ElementType[] = ['texto', 'bloco', 'secao', 'link', 'objeto3d'];
+
+  // Nomes em português de cada valor aceito (passam por t() ao mostrar).
+  const L_IN: Record<(typeof ANIM_IN)[number], string> = { fade: 'Surgir', up: 'Subir', down: 'Descer', left: 'Da esquerda', right: 'Da direita', zoom: 'Aproximar', blur: 'Desfocar' };
+  const L_HOVER: Record<(typeof ANIM_HOVER)[number], string> = { lift: 'Elevar', grow: 'Crescer', tilt: 'Inclinar', dim: 'Escurecer' };
+  const L_LOOP: Record<(typeof ANIM_LOOP)[number], string> = { float: 'Flutuar', pulse: 'Pulsar', spin: 'Girar', sway: 'Balançar' };
+  const L_SHAPE: Record<(typeof SHAPES_3D)[number], string> = { cubo: 'Cubo', esfera: 'Esfera', toro: 'Toro', no: 'Nó', cone: 'Cone', icosaedro: 'Icosaedro', capsula: 'Cápsula', cartoes: 'Cartões' };
+  const L_MATERIAL: Record<(typeof MATERIALS_3D)[number], string> = { fosco: 'Fosco', metal: 'Metal', vidro: 'Vidro', brilho: 'Brilho', arame: 'Arame' };
+  const L_LIGHT: Record<(typeof LIGHTS_3D)[number], string> = { suave: 'Suave', estudio: 'Estúdio', contraste: 'Contraste' };
+
+  let sel = $derived(doc.elements.find((e) => e.id === selectedId && !e.hidden) ?? null);
+  let anim = $derived<Anim>(sel?.anim ?? {});
+  let scene = $derived<Scene3D>(sel?.scene ?? DEFAULT_SCENE);
+
+  /** Mescla o que mudou e passa por cleanAnim; vazio remove a animação. */
+  function setAnim(patch: Partial<Record<keyof Anim, unknown>>) {
+    if (!sel) return;
+    const next = cleanAnim({ ...sel.anim, ...patch });
+    if (next) sel.anim = next;
+    else delete sel.anim;
+    commit();
+  }
+
+  function setScene(patch: Partial<Record<keyof Scene3D, unknown>>) {
+    if (!sel || sel.type !== 'objeto3d') return;
+    sel.scene = cleanScene(patch, sel.scene ?? DEFAULT_SCENE);
+    commit();
+  }
+
+  const val = (e: Event) => (e.currentTarget as HTMLInputElement).value;
+  /** Campo numérico vazio não muda nada (cleanAnim/cleanScene ignoram o que não é número). */
+  const numOf = (e: Event) => (val(e) === '' ? undefined : Number(val(e)));
 
   // Camadas: o elemento de cima aparece primeiro.
   let layers = $derived(doc.elements.map((e, i) => ({ e, i })).reverse());
@@ -210,6 +241,108 @@
           </li>
         {/each}
       </ul>
+    {/if}
+    {#if sel}
+      <section aria-labelledby="anim-titulo">
+        <h3 id="anim-titulo">{t('Animação')}</h3>
+        <label class="row">
+          <span>{t('Ao aparecer')}</span>
+          <select class="field" value={anim.in ?? ''} onchange={(e) => setAnim({ in: val(e) })}>
+            <option value="">{t('Nenhuma')}</option>
+            {#each ANIM_IN as v (v)}<option value={v}>{t(L_IN[v])}</option>{/each}
+          </select>
+        </label>
+        {#if anim.in}
+          <label class="row">
+            <span>{t('Atraso (s)')}</span>
+            <input class="field" type="number" min="0" max="3" step="0.1" value={anim.delay ?? 0} onchange={(e) => setAnim({ delay: numOf(e) })} />
+          </label>
+          <label class="row">
+            <span>{t('Duração (s)')}</span>
+            <input class="field" type="number" min="0.2" max="3" step="0.1" value={anim.duration ?? 0.6} onchange={(e) => setAnim({ duration: numOf(e) })} />
+          </label>
+        {/if}
+        <label class="row">
+          <span>{t('Ao passar o mouse')}</span>
+          <select class="field" value={anim.hover ?? ''} onchange={(e) => setAnim({ hover: val(e) })}>
+            <option value="">{t('Nenhuma')}</option>
+            {#each ANIM_HOVER as v (v)}<option value={v}>{t(L_HOVER[v])}</option>{/each}
+          </select>
+        </label>
+        <label class="row">
+          <span>{t('Repetir')}</span>
+          <select class="field" value={anim.loop ?? ''} onchange={(e) => setAnim({ loop: val(e) })}>
+            <option value="">{t('Nenhuma')}</option>
+            {#each ANIM_LOOP as v (v)}<option value={v}>{t(L_LOOP[v])}</option>{/each}
+          </select>
+        </label>
+        {#if anim.loop}
+          <label class="row">
+            <span>{t('Volta (s)')}</span>
+            <input class="field" type="number" min="1" max="30" step="0.5" value={anim.loopDuration ?? 4} onchange={(e) => setAnim({ loopDuration: numOf(e) })} />
+          </label>
+        {/if}
+        <label class="row">
+          <span>{t('Profundidade na rolagem')}</span>
+          <input class="field" type="number" min="-1" max="1" step="0.1" value={anim.parallax ?? 0} onchange={(e) => setAnim({ parallax: numOf(e) ?? 0 })} />
+        </label>
+      </section>
+
+      {#if sel.type === 'objeto3d'}
+        <section aria-labelledby="cena-titulo">
+          <h3 id="cena-titulo">{t('Objeto 3D')}</h3>
+          <label class="row">
+            <span>{t('Forma')}</span>
+            <select class="field" value={scene.shape} onchange={(e) => setScene({ shape: val(e) })}>
+              {#each SHAPES_3D as v (v)}<option value={v}>{t(L_SHAPE[v])}</option>{/each}
+            </select>
+          </label>
+          <label class="row">
+            <span>{t('Material')}</span>
+            <select class="field" value={scene.material} onchange={(e) => setScene({ material: val(e) })}>
+              {#each MATERIALS_3D as v (v)}<option value={v}>{t(L_MATERIAL[v])}</option>{/each}
+            </select>
+          </label>
+          <label class="row">
+            <span>{t('Cor')}</span>
+            <input class="color" type="color" value={scene.color} onchange={(e) => setScene({ color: val(e) })} />
+          </label>
+          <label class="row">
+            <span>{t('Segunda cor')}</span>
+            <input class="color" type="color" value={scene.color2} onchange={(e) => setScene({ color2: val(e) })} />
+          </label>
+          <label class="row">
+            <span>{t('Luz')}</span>
+            <select class="field" value={scene.light} onchange={(e) => setScene({ light: val(e) })}>
+              {#each LIGHTS_3D as v (v)}<option value={v}>{t(L_LIGHT[v])}</option>{/each}
+            </select>
+          </label>
+          <div class="row stack">
+            <span>{t('Rotação')}</span>
+            <div class="trio">
+              <input class="field" type="number" min="-360" max="360" aria-label={t('Rotação X')} value={scene.rotX} onchange={(e) => setScene({ rotX: numOf(e) })} />
+              <input class="field" type="number" min="-360" max="360" aria-label={t('Rotação Y')} value={scene.rotY} onchange={(e) => setScene({ rotY: numOf(e) })} />
+              <input class="field" type="number" min="-360" max="360" aria-label={t('Rotação Z')} value={scene.rotZ} onchange={(e) => setScene({ rotZ: numOf(e) })} />
+            </div>
+          </div>
+          <label class="row">
+            <span>{t('Giro (graus por segundo)')}</span>
+            <input class="field" type="number" min="-180" max="180" step="5" value={scene.spin} onchange={(e) => setScene({ spin: numOf(e) })} />
+          </label>
+          <label class="row">
+            <span>{t('Aproximação')}</span>
+            <input class="field" type="number" min="0.5" max="2" step="0.1" value={scene.zoom} onchange={(e) => setScene({ zoom: numOf(e) })} />
+          </label>
+          <label class="check">
+            <input type="checkbox" checked={scene.float} onchange={(e) => setScene({ float: e.currentTarget.checked })} />
+            <span>{t('Flutuar')}</span>
+          </label>
+          <label class="check">
+            <input type="checkbox" checked={scene.pointer} onchange={(e) => setScene({ pointer: e.currentTarget.checked })} />
+            <span>{t('Seguir o ponteiro')}</span>
+          </label>
+        </section>
+      {/if}
     {/if}
   {:else if tab === 'inserir'}
     <section>
@@ -508,6 +641,55 @@
   h3 {
     margin: 0;
     font: 600 12px var(--font-ui);
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 96px;
+    align-items: center;
+    gap: var(--s2);
+  }
+
+  .row .field {
+    height: 28px;
+    padding: 0 var(--s2);
+    font: 500 12px var(--font-ui);
+  }
+
+  .row input[type='number'] {
+    font-family: var(--font-mono);
+  }
+
+  .row.stack {
+    grid-template-columns: 1fr;
+    gap: var(--s1);
+  }
+
+  .trio {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2px;
+  }
+
+  .trio .field {
+    padding: 0 4px;
+  }
+
+  .color {
+    width: 100%;
+    height: 28px;
+    padding: 2px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .check {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    cursor: pointer;
   }
 
   .basic {

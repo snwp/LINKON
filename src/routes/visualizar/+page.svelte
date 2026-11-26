@@ -1,5 +1,6 @@
 <script lang="ts">
   import { slidingPill, frameIn } from '$lib/motion';
+  import { onDestroy } from 'svelte';
   import { page } from '$app/state';
   import { PenLine, Globe, Rocket, Monitor, Smartphone, ExternalLink, TriangleAlert, CircleX } from '@lucide/svelte';
   import { api, message, type PublishCheck } from '$lib/api';
@@ -54,6 +55,18 @@
     ro.observe(viewport);
     return () => ro.disconnect();
   });
+
+  // O iframe não roda scripts do documento: o app mesmo liga a entrada, o parallax e o 3D (código do Linkon) sobre ele.
+  let stopMotion: (() => void) | undefined;
+  async function wake(e: Event) {
+    const d = (e.currentTarget as HTMLIFrameElement).contentDocument;
+    stopMotion?.();
+    stopMotion = undefined;
+    if (!d) return;
+    const { start } = await import('$lib/runtime');
+    stopMotion = start(d);
+  }
+  onDestroy(() => stopMotion?.());
 
   async function openBrowser() {
     if (!current || !doc || busy) return;
@@ -168,7 +181,7 @@
       </div>
     {/if}
 
-    <!-- Sem allow-scripts: nada da página roda como código. A mesma origem só serve para fontes e imagens carregarem. -->
+    <!-- Sem allow-scripts: nada da página roda como código. A mesma origem serve para fontes e imagens carregarem e para o app animar o documento por fora (wake). -->
     <div class="viewport" class:light={backdrop === 'claro'} bind:this={viewport}>
       {#key view}
         <div class="frame-box" in:frameIn style={`width:${frame.width * scale}px;height:${frame.height * scale}px`}>
@@ -176,6 +189,7 @@
             title={t('Visualização de {title}', { title: current.title })}
             srcdoc={html}
             sandbox="allow-same-origin allow-popups"
+            onload={wake}
             style={`width:${frame.width}px;height:${frame.height}px;transform:scale(${scale})`}
           ></iframe>
         </div>

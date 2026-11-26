@@ -3,7 +3,62 @@
  * Os elementos ficam em `elements` na ordem de pintura: o último fica por cima.
  */
 
-export type ElementType = 'texto' | 'imagem' | 'bloco' | 'secao' | 'link' | 'referencia';
+export type ElementType = 'texto' | 'imagem' | 'bloco' | 'secao' | 'link' | 'referencia' | 'objeto3d';
+
+/** Entrada: toca uma vez quando o elemento aparece na tela. */
+export const ANIM_IN = ['fade', 'up', 'down', 'left', 'right', 'zoom', 'blur'] as const;
+/** Ao passar o mouse. */
+export const ANIM_HOVER = ['lift', 'grow', 'tilt', 'dim'] as const;
+/** Repete sem parar. */
+export const ANIM_LOOP = ['float', 'pulse', 'spin', 'sway'] as const;
+/**
+ * Animação de um elemento. Só valores desta lista chegam ao HTML (ver cleanAnim); o desenho é CSS e o script
+ * do próprio Linkon (nunca código da IA). Com `prefers-reduced-motion`, nada se move.
+ */
+export type Anim = {
+  in?: (typeof ANIM_IN)[number];
+  /** Segundos antes da entrada (0 a 3). */
+  delay?: number;
+  /** Duração da entrada em segundos (0,2 a 3). */
+  duration?: number;
+  hover?: (typeof ANIM_HOVER)[number];
+  loop?: (typeof ANIM_LOOP)[number];
+  /** Duração de uma volta do loop em segundos (1 a 30). */
+  loopDuration?: number;
+  /** Rolagem com profundidade: fração do scroll (-1 a 1, 0 = nada). */
+  parallax?: number;
+};
+
+export const SHAPES_3D = ['cubo', 'esfera', 'toro', 'no', 'cone', 'icosaedro', 'capsula', 'cartoes'] as const;
+export const MATERIALS_3D = ['fosco', 'metal', 'vidro', 'brilho', 'arame'] as const;
+export const LIGHTS_3D = ['suave', 'estudio', 'contraste'] as const;
+/** Cena do elemento `objeto3d`, desenhada pelo script 3D do Linkon (three empacotado, sem CDN). */
+export type Scene3D = {
+  shape: (typeof SHAPES_3D)[number];
+  material: (typeof MATERIALS_3D)[number];
+  /** Cor do objeto (hex). */
+  color: string;
+  /** Segunda cor (hex): luz de recorte e, em `cartoes`, a cor dos cartões de trás. */
+  color2: string;
+  light: (typeof LIGHTS_3D)[number];
+  /** Rotação inicial em graus. */
+  rotX: number;
+  rotY: number;
+  rotZ: number;
+  /** Giro contínuo no eixo Y, em graus por segundo (-180 a 180; 0 = parado). */
+  spin: number;
+  /** Sobe e desce de leve. */
+  float: boolean;
+  /** Aproximação da câmera (0,5 a 2). */
+  zoom: number;
+  /** Inclina um pouco seguindo o ponteiro sobre o elemento. */
+  pointer: boolean;
+};
+
+export const DEFAULT_SCENE: Scene3D = {
+  shape: 'toro', material: 'brilho', color: '#2f6bff', color2: '#ffb347', light: 'estudio',
+  rotX: 20, rotY: 30, rotZ: 0, spin: 20, float: true, zoom: 1, pointer: true,
+};
 export type FontRole = 'ui' | 'text' | 'mono';
 
 export type El = {
@@ -37,6 +92,10 @@ export type El = {
   fit?: 'cover' | 'contain';
   /** referência: ideia ou arquivo mostrado como cartão. */
   ref?: { kind: 'idea' | 'file'; id: number };
+  /** Animação (qualquer tipo). */
+  anim?: Anim;
+  /** objeto3d. */
+  scene?: Scene3D;
 };
 
 export type Doc = {
@@ -120,6 +179,7 @@ export const TYPE_LABELS: Record<ElementType, string> = {
   secao: 'Seção',
   link: 'Link',
   referencia: 'Referência',
+  objeto3d: 'Objeto 3D',
 };
 
 /** Pilhas de fonte usadas no editor e no HTML exportado. */
@@ -179,6 +239,8 @@ export function createElement(type: ElementType, doc: Doc, x: number, y: number,
       return { ...base, w: 220, h: 48, fill: '#000000', color: '#ffffff', radius: 6, padding: 12, align: 'center', font: 'ui', fontSize: 16, fontWeight: 600, text: 'Saiba mais', href: 'https://', ...extra };
     case 'imagem':
       return { ...base, w: 480, h: 320, fit: 'cover', radius: 0, ...extra };
+    case 'objeto3d':
+      return { ...base, w: 480, h: 480, scene: { ...DEFAULT_SCENE }, ...extra };
     case 'referencia':
       return { ...base, w: 360, h: 140, fill: '#ffffff', borderWidth: 1, borderColor: '#d4d4d4', radius: 8, padding: 20, fontSize: 15, ...extra };
   }
@@ -190,6 +252,48 @@ export function emptyDoc(): Doc {
 
 const HEX = /^#[0-9a-f]{3}([0-9a-f]{3})?$/i;
 const finite = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
+const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, Math.round(v * 100) / 100));
+const pick = <T extends string>(list: readonly T[], v: unknown): T | undefined => (list.includes(v as T) ? (v as T) : undefined);
+const num = (v: unknown, min: number, max: number) => (typeof v === 'number' && Number.isFinite(v) ? clamp(v, min, max) : undefined);
+
+/** Animação vinda do disco ou da IA: só valores conhecidos e números dentro dos limites. Vazia vira undefined. */
+export function cleanAnim(raw: unknown): Anim | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  const a: Anim = {
+    in: pick(ANIM_IN, r.in),
+    delay: num(r.delay, 0, 3),
+    duration: num(r.duration, 0.2, 3),
+    hover: pick(ANIM_HOVER, r.hover),
+    loop: pick(ANIM_LOOP, r.loop),
+    loopDuration: num(r.loopDuration, 1, 30),
+    parallax: num(r.parallax, -1, 1),
+  };
+  for (const k of Object.keys(a) as (keyof Anim)[]) if (a[k] === undefined) delete a[k];
+  if (a.parallax === 0) delete a.parallax;
+  return a.in || a.hover || a.loop || a.parallax ? a : undefined;
+}
+
+/** Cena 3D: parte de `base` (a cena atual ou a padrão) e troca só o que vier válido em `raw`. */
+export function cleanScene(raw: unknown, base: Scene3D = DEFAULT_SCENE): Scene3D {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const hex = (v: unknown, d: string) => (typeof v === 'string' && HEX.test(v) ? v : d);
+  const bool = (v: unknown, d: boolean) => (typeof v === 'boolean' ? v : d);
+  return {
+    shape: pick(SHAPES_3D, r.shape) ?? base.shape,
+    material: pick(MATERIALS_3D, r.material) ?? base.material,
+    color: hex(r.color, base.color),
+    color2: hex(r.color2, base.color2),
+    light: pick(LIGHTS_3D, r.light) ?? base.light,
+    rotX: num(r.rotX, -360, 360) ?? base.rotX,
+    rotY: num(r.rotY, -360, 360) ?? base.rotY,
+    rotZ: num(r.rotZ, -360, 360) ?? base.rotZ,
+    spin: num(r.spin, -180, 180) ?? base.spin,
+    float: bool(r.float, base.float),
+    zoom: num(r.zoom, 0.5, 2) ?? base.zoom,
+    pointer: bool(r.pointer, base.pointer),
+  };
+}
 const NUMERIC = ['x', 'y', 'w', 'h', 'fontSize', 'fontWeight', 'lineHeight', 'padding', 'radius', 'borderWidth', 'opacity'] as const;
 
 /**
@@ -205,6 +309,10 @@ function cleanEl(raw: El): El {
   if (!Object.hasOwn(FONT_STACK, e.font)) e.font = BASE.font;
   if (e.align !== 'left' && e.align !== 'center' && e.align !== 'right') e.align = BASE.align;
   if (e.fit !== undefined && e.fit !== 'cover' && e.fit !== 'contain') e.fit = 'cover';
+  e.anim = cleanAnim(e.anim);
+  if (!e.anim) delete e.anim;
+  if (e.type === 'objeto3d') e.scene = cleanScene(e.scene);
+  else delete e.scene;
   return e;
 }
 

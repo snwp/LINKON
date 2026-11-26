@@ -87,8 +87,8 @@
           <button type="button" class="model" onclick={() => create(tpl)}>
             <span class="shots">
               {#if doc && doc.mobile}
-                <Thumb {doc} width={184} maxHeight={124} />
-                <span class="phone"><Thumb doc={doc.mobile} width={44} maxHeight={92} /></span>
+                <Thumb {doc} width={364} maxHeight={280} />
+                <span class="phone"><Thumb doc={doc.mobile} width={68} maxHeight={140} /></span>
               {:else}
                 <span class="blank">1440 × 1600</span>
               {/if}
@@ -174,7 +174,7 @@
   .models {
     flex-basis: 100%;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(384px, 1fr));
     gap: var(--s3);
     margin: var(--s2) 0 0;
     padding: 0;
@@ -206,7 +206,7 @@
   .shots {
     position: relative;
     display: block;
-    height: 124px;
+    height: 280px;
   }
 
   .phone {
@@ -222,8 +222,8 @@
   .blank {
     display: grid;
     place-items: center;
-    width: 184px;
-    height: 124px;
+    width: 364px;
+    height: 280px;
     border: 1px dashed var(--line);
     border-radius: var(--r-sm);
     color: var(--muted);

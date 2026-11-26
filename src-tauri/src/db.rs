@@ -138,6 +138,21 @@ pub(crate) fn migrate(conn: &Connection) -> rusqlite::Result<()> {
              COMMIT;",
         )?;
     }
+    if version < 5 {
+        // Bases de componentes do Linke (ver bases.rs): a URL e o resumo em texto buscado ao salvar.
+        conn.execute_batch(
+            "BEGIN;
+             CREATE TABLE component_bases (
+                 id INTEGER PRIMARY KEY,
+                 url TEXT NOT NULL UNIQUE,
+                 title TEXT NOT NULL,
+                 summary TEXT NOT NULL,
+                 created_at INTEGER NOT NULL
+             );
+             PRAGMA user_version = 5;
+             COMMIT;",
+        )?;
+    }
     Ok(())
 }
 

@@ -1,5 +1,6 @@
 mod ai;
 mod backup;
+mod bases;
 mod db;
 mod export;
 mod image;
@@ -496,7 +497,10 @@ pub fn run() {
             restore_backup,
             ai::ai_check,
             ai::ai_run,
-            ai::ai_cancel
+            ai::ai_cancel,
+            bases::list_bases,
+            bases::add_base,
+            bases::delete_base
         ])
         .run(tauri::generate_context!())
         .expect("falha ao iniciar o Linkon");

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { HardDriveDownload, RotateCcw } from '@lucide/svelte';
-  import { api, message } from '$lib/api';
+  import { api, message, type ComponentBase } from '$lib/api';
   import { store, reload, notify, stamp } from '$lib/store.svelte';
   import { flushAll } from '$lib/pending';
   import { friendlyAiError } from '$lib/editor/assistant';
@@ -128,6 +128,41 @@
       aiError = friendlyAiError(message(e));
     } finally {
       aiChecking = false;
+    }
+  }
+
+  // ---------- bases de componentes do Linke ----------
+  let bases = $state<ComponentBase[]>([]);
+  let baseDraft = $state('');
+  let baseBusy = $state(false);
+  let baseError = $state('');
+  onMount(async () => {
+    bases = await api.listBases().catch(() => []);
+  });
+
+  async function addBase() {
+    const url = baseDraft.trim();
+    if (!url || baseBusy) return;
+    baseBusy = true;
+    baseError = '';
+    try {
+      const b = await api.addBase(url);
+      bases = [...bases.filter((x) => x.id !== b.id), b];
+      baseDraft = '';
+      notify(t('Base “{name}” guardada.', { name: b.title }));
+    } catch (e) {
+      baseError = message(e);
+    } finally {
+      baseBusy = false;
+    }
+  }
+
+  async function removeBase(b: ComponentBase) {
+    try {
+      await api.deleteBase(b.id);
+      bases = bases.filter((x) => x.id !== b.id);
+    } catch (e) {
+      baseError = message(e);
     }
   }
 
@@ -359,6 +394,23 @@
             <span>{t('Avisar quando Linke terminar e eu estiver fora do editor')}</span>
           </span>
         </label>
+
+        <h3 class="sub-h">{t('Bases de componentes')}</h3>
+        <p class="small">
+          {t('Cole o endereço de um site de componentes ou design system. O Linkon lê a página uma vez e guarda um resumo (componentes, seções, cores e fontes) que o Linke usa como referência sempre que monta algo.')}
+        </p>
+        {#each bases as b (b.id)}
+          <div class="path base">
+            <span class="base-name">{b.title}<code class="mono muted">{b.url}</code></span>
+            <button class="btn" onclick={() => removeBase(b)}>{t('Remover')}</button>
+          </div>
+        {/each}
+        <form class="key-row" onsubmit={(e) => (e.preventDefault(), addBase())}>
+          <label class="visually-hidden" for="base-url">{t('Endereço do site de componentes')}</label>
+          <input id="base-url" class="field" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://" bind:value={baseDraft} />
+          <button class="btn primary" disabled={baseBusy || !baseDraft.trim()}>{baseBusy ? t('Lendo o site…') : t('Adicionar')}</button>
+        </form>
+        {#if baseError}<p class="error-text">{baseError}</p>{/if}
       </section>
 
       <section id="imagens" aria-labelledby="h-img">
@@ -663,6 +715,26 @@
   .key-row {
     display: flex;
     gap: var(--s2);
+  }
+
+  .sub-h {
+    margin: var(--s4) 0 0;
+    font: 600 14px var(--font-ui);
+    color: var(--fg);
+  }
+
+  .base + .base,
+  .base + .key-row {
+    margin-top: var(--s2);
+  }
+
+  .base-name {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 13px;
   }
 
   .key-row .field {

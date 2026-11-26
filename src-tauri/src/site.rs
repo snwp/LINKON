@@ -1,5 +1,5 @@
 //! Cada interface vira um site de verdade em `Documentos/Linkon/<pasta>/<interface>/`:
-//! `index.html`, `assets/` (as imagens), `fit.js` (ajuste a telas estreitas) e `vercel.json` (cabeçalhos de
+//! `index.html`, `assets/` (as imagens), `fit.js` (ajuste a telas estreitas), `linkon.js` (animação e 3D, quando a página usa) e `vercel.json` (cabeçalhos de
 //! segurança). O HTML vem pronto do frontend (src/lib/editor/render.ts); aqui só trocamos `linkon-file://<id>`
 //! pelo caminho da imagem copiada. Sem Tauri, para rodar nos testes (tests/db.rs).
 
@@ -17,6 +17,11 @@ const MARKER: &str = ".linkon";
 /// O mesmo script de render.ts (FIT), em arquivo próprio para a CSP poder proibir script embutido.
 pub const FIT_JS: &str = "(function(){var ps=document.querySelectorAll('.page');function f(){for(var i=0;i<ps.length;i++){var p=ps[i];if(!p.offsetWidth)continue;var s=Math.min(1,document.documentElement.clientWidth/p.offsetWidth);p.style.transform='scale('+s+')';p.style.marginLeft=s<1?'0':'auto';document.body.style.height=(p.offsetHeight*s)+'px'}}addEventListener('resize',f);f()})()\n";
 pub const FIT_TAG: &str = r#"<script src="fit.js"></script>"#;
+
+/// Animações e 3D do site: `src-tauri/runtime/linkon.js`, gerado de src/lib/runtime (npm run build:runtime) e
+/// versionado. É código do Linkon, nunca da IA; o HTML só pode apontar para ele com exatamente esta tag.
+pub const LINKON_JS: &str = include_str!("../runtime/linkon.js");
+pub const LINKON_TAG: &str = r#"<script src="linkon.js"></script>"#;
 
 /// O site é estático e não carrega nada de fora (fontes e imagens vão junto): tudo o mais fica proibido.
 pub const CSP: &str = "default-src 'none'; img-src 'self' data:; font-src 'self' data:; style-src 'unsafe-inline'; script-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
@@ -176,6 +181,12 @@ pub fn write_site_pages(
         }
     }
     fs::write(dir.join("fit.js"), FIT_JS).map_err(err)?;
+    // linkon.js só acompanha o site que o usa (animação ou 3D); se deixou de usar, sai da pasta.
+    if std::iter::once(html).chain(extra.iter().map(|(_, p)| p.as_str())).any(|h| h.contains(LINKON_TAG)) {
+        fs::write(dir.join("linkon.js"), LINKON_JS).map_err(err)?;
+    } else {
+        let _ = fs::remove_file(dir.join("linkon.js"));
+    }
     fs::write(dir.join("vercel.json"), vercel_json()).map_err(err)?;
     Ok((rel, dir))
 }
@@ -223,8 +234,8 @@ pub fn audit(html: &str) -> Vec<Finding> {
     let mut v = Vec::new();
     let mut add = |level, text: &str| v.push(Finding { level, text: text.into() });
     let lower = html.to_lowercase();
-    let without_fit = lower.replace(FIT_TAG, "");
-    if without_fit.contains("<script") {
+    let ours = lower.replace(FIT_TAG, "").replace(LINKON_TAG, "");
+    if ours.contains("<script") {
         add("erro", "A página tem um script que não foi o Linkon que colocou.");
     }
     for tag in ["<iframe", "<object", "<embed", "<form", "<base", "<meta http-equiv"] {
@@ -360,6 +371,7 @@ mod tests {
         assert!(index.contains(r#"src="assets/"#) && index.contains(r#"src="data:,""#));
         assert_eq!(fs::read_dir(dir.join("assets")).unwrap().count(), 1);
         assert!(dir.join("vercel.json").exists() && dir.join("fit.js").exists());
+        assert!(!dir.join("linkon.js").exists());
 
         // Renomear move a pasta; a imagem que saiu da página sai de assets/.
         c.execute("UPDATE pages SET title = 'Home' WHERE id = ?1", [page]).unwrap();
@@ -367,6 +379,12 @@ mod tests {
         assert_eq!(rel2, "cafe-aurora/home");
         assert!(!dir.exists() && dir2.join(MARKER).exists());
         assert_eq!(fs::read_dir(dir2.join("assets")).unwrap().count(), 0);
+
+        // linkon.js acompanha o site que usa a tag e some quando a página deixa de usá-la.
+        write_site(&c, &lib, &root, page, &format!("<p>3d</p>{LINKON_TAG}")).unwrap();
+        assert_eq!(fs::read_to_string(dir2.join("linkon.js")).unwrap(), LINKON_JS);
+        write_site(&c, &lib, &root, page, "<p>sem</p>").unwrap();
+        assert!(!dir2.join("linkon.js").exists());
 
         // Pasta com o mesmo nome feita pelo usuário não é tocada: o Linkon usa outro nome.
         fs::create_dir_all(root.join("cafe-aurora").join("contato")).unwrap();
@@ -398,6 +416,12 @@ mod tests {
         assert_eq!(levels(r#"<img src="x" onerror="alert(1)">"#), ["erro"]);
         assert_eq!(levels(r#"<a href="javascript:alert(1)">x</a>"#), ["erro"]);
         assert_eq!(levels("<iframe src=x></iframe>"), ["erro"]);
+        // O script do Linkon só passa com a tag exata; qualquer variação ou outro script continua erro.
+        assert!(audit(&format!("<main></main>{FIT_TAG}{LINKON_TAG}")).is_empty());
+        assert_eq!(levels(r#"<script src="linkon.js" defer></script>"#), ["erro"]);
+        assert_eq!(levels(r#"<script src="https://x.com/linkon.js"></script>"#), ["erro"]);
+        assert_eq!(levels(&format!("{LINKON_TAG}<script>alert(1)</script>")), ["erro"]);
+        assert_eq!(levels(&format!(r#"{LINKON_TAG}<div onclick="x()"></div>"#)), ["erro"]);
         assert_eq!(levels(r#"<a href="https://">Comprar</a>"#), ["aviso"]);
     }
 

@@ -130,7 +130,15 @@ type Api = {
   imageStatus(): Promise<{ codex: string; hasKey: boolean }>;
   /** Guarda a chave da OpenAI no cofre do Windows; vazia apaga. A chave nunca volta para a interface. */
   setImageKey(key: string): Promise<void>;
+
+  /** Bases de componentes do Linke: sites de referência salvos pela URL, com o resumo buscado ao salvar. */
+  listBases(): Promise<ComponentBase[]>;
+  /** Busca a página, resume e guarda (ou atualiza, se a URL já existe). */
+  addBase(url: string): Promise<ComponentBase>;
+  deleteBase(id: number): Promise<void>;
 };
+
+export type ComponentBase = { id: number; url: string; title: string; summary: string; created_at: number };
 
 export type VercelStatus = { installed: boolean; user: string };
 export type PublishCheck = {
@@ -248,6 +256,10 @@ const tauriApi: Api = {
   cancelImage: () => invoke('cancel_image'),
   imageStatus: () => invoke('image_status'),
   setImageKey: (key) => invoke('set_image_key', { key }),
+
+  listBases: () => invoke('list_bases'),
+  addBase: (url) => invoke('add_base', { url }),
+  deleteBase: (id) => invoke('delete_base', { id }),
 };
 
 const KINDS: Record<string, FileKind> = {};
@@ -525,6 +537,14 @@ function memoryApi(): Api {
     async setImageKey() {
       throw tr('A chave só pode ser guardada no app desktop.');
     },
+
+    async listBases() {
+      return [];
+    },
+    async addBase() {
+      throw tr('Buscar um site de componentes só funciona no app desktop.');
+    },
+    async deleteBase() {},
   };
 }
 
