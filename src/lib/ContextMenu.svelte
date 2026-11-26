@@ -126,7 +126,7 @@
     background: var(--glass);
     backdrop-filter: var(--glass-blur);
     box-shadow:
-      0 0 0 1px rgb(255 255 255 / 0.04),
+      0 0 0 1px color-mix(in srgb, var(--fg) 4%, transparent),
       0 16px 40px rgb(0 0 0 / 0.55);
     transform-origin: top left;
     outline: none;
@@ -150,12 +150,12 @@
 
   button:hover,
   button:focus-visible {
-    background: #262626;
+    background: color-mix(in srgb, var(--fg) 14.9%, var(--bg));
     outline: none;
   }
 
   button:disabled {
-    color: #5a5a5a;
+    color: color-mix(in srgb, var(--fg) 35.3%, var(--bg));
     cursor: default;
   }
 
@@ -194,14 +194,14 @@
     flex: none;
     padding: 1px 6px;
     border-radius: 5px;
-    background: #2a2a2a;
+    background: color-mix(in srgb, var(--fg) 16.5%, var(--bg));
     color: var(--muted);
     font: 500 10.5px var(--font-ui);
   }
 
   .note {
     flex: none;
-    color: #6b6b6b;
+    color: color-mix(in srgb, var(--fg) 42%, var(--bg));
     font: 400 11.5px var(--font-ui);
   }
 

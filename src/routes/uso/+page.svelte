@@ -2,6 +2,7 @@
   // Uso da IA pelo Linkon: hoje, esta semana (segunda a hoje) e os últimos 7 dias. Dados em lib/usage.ts.
   import { loadUsage, sum, dayStart, weekStart, type UsageRec } from '$lib/usage';
   import { AI_MODELS } from '$lib/editor/assistant';
+  import { locale, t } from '$lib/i18n.svelte';
 
   const recs: UsageRec[] = loadUsage();
   const now = Date.now();
@@ -14,7 +15,7 @@
     ['Esta semana', weekSum],
   ] as const;
 
-  const fmt = new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 });
+  const fmt = $derived(new Intl.NumberFormat(locale(), { notation: 'compact', maximumFractionDigits: 1 }));
   const tokens = (n: number) => fmt.format(n);
   function time(ms: number): string {
     const s = Math.round(ms / 1000);
@@ -24,7 +25,7 @@
   }
 
   // Últimos 7 dias, do mais antigo ao de hoje. Barra = tokens (entrada embaixo, saída em cima), na mesma escala.
-  const days = Array.from({ length: 7 }, (_, i) => {
+  const days = $derived(Array.from({ length: 7 }, (_, i) => {
     const d = new Date(today);
     d.setDate(d.getDate() - (6 - i));
     const start = d.getTime();
@@ -32,15 +33,15 @@
     next.setDate(d.getDate() + 1);
     const s = sum(recs.filter((r) => r.at >= start && r.at < next.getTime()));
     return {
-      label: d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''),
+      label: d.toLocaleDateString(locale(), { weekday: 'short' }).replace('.', ''),
       date: d.getDate(),
       isToday: start === today,
       ...s,
     };
-  });
-  const max = Math.max(1, ...days.map((d) => d.input + d.output));
+  }));
+  const max = $derived(Math.max(1, ...days.map((d) => d.input + d.output)));
 
-  const modelName = (id: string) => AI_MODELS.find((m) => m.id === id)?.name ?? (id || 'Padrão');
+  const modelName = (id: string) => AI_MODELS.find((m) => m.id === id)?.name ?? (id || t('Padrão'));
   const byModel = Object.entries(
     recs
       .filter((r) => r.at >= weekStart(now))
@@ -50,19 +51,19 @@
 </script>
 
 <div class="usage">
-  <h1>Uso</h1>
+  <h1>{t('Uso')}</h1>
 
   <div class="kpis">
     {#each KPIS as [label, s] (label)}
-      <section class="kpi" aria-label={label}>
-        <h2>{label}</h2>
+      <section class="kpi" aria-label={t(label)}>
+        <h2>{t(label)}</h2>
         <p class="big mono">{tokens(s.input + s.output)} <span>tokens</span></p>
         <dl>
-          <div><dt>Pedidos</dt><dd class="mono">{s.requests}</dd></div>
-          <div><dt>Entrada</dt><dd class="mono">{tokens(s.input)}</dd></div>
-          <div><dt>Saída</dt><dd class="mono">{tokens(s.output)}</dd></div>
-          <div><dt>Tempo</dt><dd class="mono">{time(s.ms)}</dd></div>
-          {#if s.failed}<div><dt>Sem resposta</dt><dd class="mono">{s.failed}</dd></div>{/if}
+          <div><dt>{t('Pedidos')}</dt><dd class="mono">{s.requests}</dd></div>
+          <div><dt>{t('Entrada')}</dt><dd class="mono">{tokens(s.input)}</dd></div>
+          <div><dt>{t('Saída')}</dt><dd class="mono">{tokens(s.output)}</dd></div>
+          <div><dt>{t('Tempo')}</dt><dd class="mono">{time(s.ms)}</dd></div>
+          {#if s.failed}<div><dt>{t('Sem resposta')}</dt><dd class="mono">{s.failed}</dd></div>{/if}
         </dl>
       </section>
     {/each}
@@ -70,14 +71,14 @@
 
   <section class="chart-box" aria-labelledby="u-dias">
     <div class="chart-head">
-      <h2 id="u-dias">Últimos 7 dias</h2>
-      <span class="legend"><i class="sw out"></i>Saída <i class="sw in"></i>Entrada</span>
+      <h2 id="u-dias">{t('Últimos 7 dias')}</h2>
+      <span class="legend"><i class="sw out"></i>{t('Saída')} <i class="sw in"></i>{t('Entrada')}</span>
     </div>
     <ol class="chart">
       {#each days as d (d.label + d.date)}
         <li class:today={d.isToday}>
           <span class="val mono">{d.input + d.output ? tokens(d.input + d.output) : ''}</span>
-          <span class="bar" style={`height:${((d.input + d.output) / max) * 100}%`} title={`${d.requests} pedidos · ${tokens(d.input)} entrada · ${tokens(d.output)} saída`}>
+          <span class="bar" style={`height:${((d.input + d.output) / max) * 100}%`} title={t('{n} pedidos · {input} entrada · {output} saída', { n: d.requests, input: tokens(d.input), output: tokens(d.output) })}>
             <span class="out" style={`height:${d.input + d.output ? (d.output / (d.input + d.output)) * 100 : 0}%`}></span>
           </span>
           <span class="day">{d.label} {d.date}</span>
@@ -88,7 +89,7 @@
 
   {#if byModel.length}
     <section class="models" aria-labelledby="u-modelos">
-      <h2 id="u-modelos">Por modelo nesta semana</h2>
+      <h2 id="u-modelos">{t('Por modelo nesta semana')}</h2>
       <ul>
         {#each byModel as [id, n] (id)}
           <li>
@@ -132,7 +133,7 @@
     padding: var(--s4) var(--s5);
     border: 1px solid var(--line);
     border-radius: 12px;
-    background: #0c0c0c;
+    background: color-mix(in srgb, var(--fg) 4.7%, var(--bg));
   }
 
   .big {
@@ -174,7 +175,7 @@
     padding: var(--s4) var(--s5);
     border: 1px solid var(--line);
     border-radius: 12px;
-    background: #0c0c0c;
+    background: color-mix(in srgb, var(--fg) 4.7%, var(--bg));
   }
 
   .chart-head {
@@ -205,7 +206,7 @@
 
   .sw.in {
     margin-left: 8px;
-    background: #4a4a4a;
+    background: color-mix(in srgb, var(--fg) 29%, var(--bg));
   }
 
   .chart {
@@ -234,7 +235,7 @@
     min-height: 2px;
     align-self: end;
     border-radius: 4px 4px 0 0;
-    background: #4a4a4a;
+    background: color-mix(in srgb, var(--fg) 29%, var(--bg));
     overflow: hidden;
   }
 
@@ -274,7 +275,7 @@
   .track {
     height: 6px;
     border-radius: 3px;
-    background: #1c1c1c;
+    background: color-mix(in srgb, var(--fg) 11%, var(--bg));
     overflow: hidden;
   }
 

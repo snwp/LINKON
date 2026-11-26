@@ -5,6 +5,7 @@
    */
   import { AlignLeft, AlignCenter, AlignRight, Bold, Copy, Trash2, Link2 } from '@lucide/svelte';
   import type { El } from './doc';
+  import { t } from '$lib/i18n.svelte';
 
   type Props = {
     el: El;
@@ -41,20 +42,20 @@
   class="bar"
   style={`left:${left}px;top:${top}px`}
   role="toolbar"
-  aria-label={`Ajustes de ${el.name}`}
+  aria-label={t('Ajustes de {name}', { name: el.name })}
   tabindex="-1"
   onpointerdown={(e) => e.stopPropagation()}
 >
   {#if hasText}
-    <label class="num" data-tip="Tamanho do texto">
-      <span class="visually-hidden">Tamanho do texto</span>
+    <label class="num" data-tip={t('Tamanho do texto')}>
+      <span class="visually-hidden">{t('Tamanho do texto')}</span>
       <input type="number" min="8" max="400" value={el.fontSize} onchange={(e) => num('fontSize', e, 8, 400)} />
     </label>
     <button
       class="ico"
       aria-pressed={el.fontWeight >= 600}
-      aria-label="Negrito"
-      data-tip="Negrito"
+      aria-label={t('Negrito')}
+      data-tip={t('Negrito')}
       onclick={() => {
         el.fontWeight = el.fontWeight >= 600 ? 400 : 700;
         commit();
@@ -64,16 +65,16 @@
       <button
         class="ico"
         aria-pressed={el.align === a}
-        aria-label={label}
-        data-tip={label}
+        aria-label={t(label)}
+        data-tip={t(label)}
         onclick={() => {
           el.align = a;
           commit();
         }}><Icon size={14} aria-hidden="true" /></button
       >
     {/each}
-    <label class="swatch" data-tip="Cor do texto">
-      <span class="visually-hidden">Cor do texto</span>
+    <label class="swatch" data-tip={t('Cor do texto')}>
+      <span class="visually-hidden">{t('Cor do texto')}</span>
       <span class="chip text" style={`--c:${el.color}`}>A</span>
       <input type="color" value={el.color} oninput={(e) => (el.color = e.currentTarget.value)} onchange={commit} />
     </label>
@@ -81,16 +82,16 @@
 
   {#if hasFill}
     <span class="sep"></span>
-    <label class="swatch" data-tip="Cor de fundo">
-      <span class="visually-hidden">Cor de fundo</span>
+    <label class="swatch" data-tip={t('Cor de fundo')}>
+      <span class="visually-hidden">{t('Cor de fundo')}</span>
       <span class="chip" style={`--c:${el.fill || 'transparent'}`}></span>
       <input type="color" value={el.fill || '#ffffff'} oninput={(e) => (el.fill = e.currentTarget.value)} onchange={commit} />
     </label>
   {/if}
 
   {#if hasRadius}
-    <label class="num" data-tip="Cantos arredondados">
-      <span class="visually-hidden">Cantos arredondados</span>
+    <label class="num" data-tip={t('Cantos arredondados')}>
+      <span class="visually-hidden">{t('Cantos arredondados')}</span>
       <span class="unit" aria-hidden="true">◜</span>
       <input type="number" min="0" max="999" value={el.radius} onchange={(e) => num('radius', e, 0, 999)} />
     </label>
@@ -98,9 +99,9 @@
 
   {#if el.type === 'link'}
     <span class="sep"></span>
-    <label class="url" data-tip="Endereço do link">
+    <label class="url" data-tip={t('Endereço do link')}>
       <Link2 size={13} aria-hidden="true" />
-      <span class="visually-hidden">Endereço do link</span>
+      <span class="visually-hidden">{t('Endereço do link')}</span>
       <input
         type="url"
         placeholder="https://"
@@ -115,15 +116,15 @@
 
   {#if el.type === 'imagem'}
     <span class="sep"></span>
-    <div class="seg-mini" role="group" aria-label="Ajuste da imagem">
-      <button aria-pressed={(el.fit ?? 'cover') === 'cover'} onclick={() => ((el.fit = 'cover'), commit())}>Preencher</button>
-      <button aria-pressed={el.fit === 'contain'} onclick={() => ((el.fit = 'contain'), commit())}>Caber</button>
+    <div class="seg-mini" role="group" aria-label={t('Ajuste da imagem')}>
+      <button aria-pressed={(el.fit ?? 'cover') === 'cover'} onclick={() => ((el.fit = 'cover'), commit())}>{t('Preencher')}</button>
+      <button aria-pressed={el.fit === 'contain'} onclick={() => ((el.fit = 'contain'), commit())}>{t('Caber')}</button>
     </div>
   {/if}
 
   <span class="sep"></span>
-  <button class="ico" aria-label="Duplicar (Ctrl D)" data-tip="Duplicar (Ctrl D)" onclick={duplicate}><Copy size={14} aria-hidden="true" /></button>
-  <button class="ico" aria-label="Excluir (Delete)" data-tip="Excluir (Delete)" onclick={remove}><Trash2 size={14} aria-hidden="true" /></button>
+  <button class="ico" aria-label={t('Duplicar (Ctrl D)')} data-tip={t('Duplicar (Ctrl D)')} onclick={duplicate}><Copy size={14} aria-hidden="true" /></button>
+  <button class="ico" aria-label={t('Excluir (Delete)')} data-tip={t('Excluir (Delete)')} onclick={remove}><Trash2 size={14} aria-hidden="true" /></button>
 </div>
 
 <style>
@@ -137,9 +138,9 @@
     padding: 4px;
     border: 1px solid var(--line);
     border-radius: 10px;
-    background: #141414;
+    background: color-mix(in srgb, var(--fg) 7.8%, var(--bg));
     box-shadow:
-      0 0 0 1px rgb(255 255 255 / 0.04),
+      0 0 0 1px color-mix(in srgb, var(--fg) 4%, transparent),
       0 8px 24px rgb(0 0 0 / 0.5);
     white-space: nowrap;
     color: var(--fg);
@@ -159,7 +160,7 @@
 
   .ico:hover,
   .ico[aria-pressed='true'] {
-    background: #262626;
+    background: color-mix(in srgb, var(--fg) 14.9%, var(--bg));
     color: var(--fg);
   }
 
@@ -178,7 +179,7 @@
   .url:hover,
   .num:focus-within,
   .url:focus-within {
-    background: #1f1f1f;
+    background: color-mix(in srgb, var(--fg) 12.2%, var(--bg));
   }
 
   .num input {
@@ -214,7 +215,7 @@
   }
 
   .swatch:hover {
-    background: #262626;
+    background: color-mix(in srgb, var(--fg) 14.9%, var(--bg));
   }
 
   .chip {
@@ -222,7 +223,7 @@
     height: 16px;
     border-radius: 4px;
     background: var(--c);
-    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.25);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 25%, transparent);
   }
 
   /* Cor do texto: um "A" com uma faixa da cor embaixo. */
@@ -270,7 +271,7 @@
 
   .seg-mini button[aria-pressed='true'],
   .seg-mini button:hover {
-    background: #262626;
+    background: color-mix(in srgb, var(--fg) 14.9%, var(--bg));
     color: var(--fg);
   }
 </style>

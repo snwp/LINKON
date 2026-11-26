@@ -11,15 +11,17 @@
 
 :root {
   --font-logo: 'Science Gothic', var(--font-ui);
+  /* Cada tema define só fundo, texto e destaque; painéis, bordas e cinzas saem da mistura dos dois.
+     Assim os cinzas de todas as telas acompanham o tema sem uma lista por tema. */
   --bg: #000000; /* fundo geral */
-  --panel: #0f0f0f; /* sidebar e painéis */
-  --card: #1a1a1a; /* cards e janelas */
-  --line: #2e2e2e; /* bordas e divisórias */
-  --accent: #ffffff; /* botão principal, seleção e estado ativo */
   --fg: #ffffff; /* títulos e textos */
-  --muted: #9a9a9a; /* textos secundários (7:1 sobre o fundo) */
+  --accent: #ffffff; /* botão principal, seleção e estado ativo */
   --accent-ink: #000000;
-  --danger: #ffffff; /* erros aparecem invertidos (fundo branco), não em vermelho */
+  --panel: color-mix(in srgb, var(--fg) 6%, var(--bg)); /* sidebar e painéis */
+  --card: color-mix(in srgb, var(--fg) 10%, var(--bg)); /* cards e janelas */
+  --line: color-mix(in srgb, var(--fg) 18%, var(--bg)); /* bordas e divisórias */
+  --muted: color-mix(in srgb, var(--fg) 60%, var(--bg)); /* textos secundários */
+  --danger: var(--fg); /* erros aparecem invertidos (fundo branco), não em vermelho */
   /* Cinzas das ferramentas: */
   --guide: #ffffff; /* guias do editor, desenhadas em modo diferença para aparecer sobre qualquer fundo */
   --node-project: #8a8a8a; /* projetos no grafo de conexões */
@@ -47,6 +49,50 @@
   color-scheme: dark;
 }
 
+/* Temas (Configurações > Aparência). O escuro é o :root acima. Cada um parte de um objeto real,
+   não de uma paleta da moda: papel de impressora, planta de engenharia, monitor de fósforo âmbar,
+   colete de sinalização e impressão risográfica. */
+:root[data-theme='claro'] {
+  --bg: #ffffff;
+  --fg: #0a0a0a;
+  --accent: #0a0a0a;
+  --accent-ink: #ffffff;
+  --sheet: #f2f2f2;
+  color-scheme: light;
+}
+
+:root[data-theme='planta'] {
+  --bg: #0c2340;
+  --fg: #e4eef8;
+  --accent: #e4eef8;
+  --accent-ink: #0c2340;
+  color-scheme: dark;
+}
+
+:root[data-theme='ambar'] {
+  --bg: #0e0b06;
+  --fg: #ffb547;
+  --accent: #ffb547;
+  --accent-ink: #0e0b06;
+  color-scheme: dark;
+}
+
+:root[data-theme='sinal'] {
+  --bg: #f3f3f1;
+  --fg: #151515;
+  --accent: #ff4f00;
+  --accent-ink: #000000;
+  color-scheme: light;
+}
+
+:root[data-theme='riso'] {
+  --bg: #fafafa;
+  --fg: #1c3f94;
+  --accent: #ff48b0;
+  --accent-ink: #1c3f94;
+  color-scheme: light;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -61,7 +107,7 @@ body {
 /* Barras de rolagem escuras e finas, iguais em todo o app. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #3a3a3a transparent;
+  scrollbar-color: color-mix(in srgb, var(--fg) 22.7%, var(--bg)) transparent;
 }
 
 html,
@@ -134,10 +180,10 @@ kbd {
   padding: 0 var(--s3);
   border-radius: 10px;
   border: 1px solid var(--line);
-  background: #141414;
+  background: color-mix(in srgb, var(--fg) 7.8%, var(--bg));
   box-shadow:
     0 1px 2px rgb(0 0 0 / 0.45),
-    inset 0 1px 0 rgb(255 255 255 / 0.05);
+    inset 0 1px 0 color-mix(in srgb, var(--fg) 5%, transparent);
   font: 500 13px var(--font-ui);
   cursor: pointer;
   white-space: nowrap;
@@ -151,8 +197,8 @@ kbd {
 }
 
 .btn:hover {
-  background: #1c1c1c;
-  border-color: #3d3d3d;
+  background: color-mix(in srgb, var(--fg) 11%, var(--bg));
+  border-color: color-mix(in srgb, var(--fg) 23.9%, var(--bg));
 }
 
 .btn.primary {
@@ -165,8 +211,8 @@ kbd {
 }
 
 .btn.primary:hover {
-  background: #e8e8e8;
-  border-color: #e8e8e8;
+  background: color-mix(in srgb, var(--accent) 90%, var(--bg));
+  border-color: color-mix(in srgb, var(--accent) 90%, var(--bg));
 }
 
 /* Ação destrutiva: inverte ao passar o mouse, para ser inconfundível sem cor. */
@@ -189,7 +235,7 @@ kbd {
   padding: 3px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #0a0a0a;
+  background: color-mix(in srgb, var(--fg) 3.9%, var(--bg));
 }
 
 .seg button {
@@ -215,7 +261,7 @@ kbd {
 }
 
 .seg:not(.has-pill) button[aria-pressed='true'] {
-  background: #262626;
+  background: color-mix(in srgb, var(--fg) 14.9%, var(--bg));
 }
 
 /* Transitions.dev — Tabs sliding: a pílula vai até a aba ativa. */
@@ -225,9 +271,9 @@ kbd {
   left: 0;
   z-index: 0;
   border-radius: 7px;
-  background: #262626;
+  background: color-mix(in srgb, var(--fg) 14.9%, var(--bg));
   box-shadow:
-    0 0 0 1px rgb(255 255 255 / 0.06),
+    0 0 0 1px color-mix(in srgb, var(--fg) 6%, transparent),
     0 1px 2px rgb(0 0 0 / 0.5);
   pointer-events: none;
   transition:
@@ -360,7 +406,7 @@ a.main {
   padding: 0 var(--s3);
   border-radius: 10px;
   border: 1px solid var(--line);
-  background: #0a0a0a;
+  background: color-mix(in srgb, var(--fg) 3.9%, var(--bg));
   box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.5);
   min-width: 0;
   transition:
@@ -369,15 +415,15 @@ a.main {
 }
 
 .field:hover {
-  border-color: #3d3d3d;
+  border-color: color-mix(in srgb, var(--fg) 23.9%, var(--bg));
 }
 
 .field:focus {
   outline: none;
-  border-color: #8a8a8a;
+  border-color: color-mix(in srgb, var(--fg) 54.1%, var(--bg));
   box-shadow:
     inset 0 1px 2px rgb(0 0 0 / 0.5),
-    0 0 0 3px rgb(255 255 255 / 0.1);
+    0 0 0 3px color-mix(in srgb, var(--fg) 10%, transparent);
 }
 
 .muted {
@@ -487,8 +533,8 @@ a.main {
 /* Contraste alto: bordas e textos secundários mais fortes. */
 @media (prefers-contrast: more) {
   :root {
-    --line: #6b6b6b;
-    --muted: #cccccc;
-    --card: #141414;
+    --line: color-mix(in srgb, var(--fg) 42%, var(--bg));
+    --muted: color-mix(in srgb, var(--fg) 80%, var(--bg));
+    --card: color-mix(in srgb, var(--fg) 7.8%, var(--bg));
   }
 }

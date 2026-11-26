@@ -9,6 +9,7 @@
   import ModelPicker from '$lib/ModelPicker.svelte';
   import Linke from '$lib/Linke.svelte';
   import { emptyDoc } from '$lib/editor/doc';
+  import { t } from '$lib/i18n.svelte';
 
   let text = $state('');
   let busy = $state(false);
@@ -23,7 +24,7 @@
     }
     return null;
   });
-  let context = $derived(folderId ? `Nova página em ${projectName(folderId) ?? 'pasta'}` : 'Nova página');
+  let context = $derived(folderId ? t('Nova página em {name}', { name: projectName(folderId) ?? t('pasta') }) : t('Nova página'));
 
   // Cresce com o texto até 6 linhas.
   $effect(() => {
@@ -33,25 +34,25 @@
     input.style.height = `${Math.min(input.scrollHeight, 6 * 20 + 10)}px`;
   });
 
-  function titleFrom(t: string): string {
-    const s = t.replace(/\s+/g, ' ').trim();
+  function titleFrom(raw: string): string {
+    const s = raw.replace(/\s+/g, ' ').trim();
     const cut = s.length > 60 ? `${s.slice(0, 57).trimEnd()}…` : s;
     return cut.charAt(0).toUpperCase() + cut.slice(1);
   }
 
   async function send() {
-    const t = text.trim();
-    if (!t || busy) return;
+    const ask = text.trim();
+    if (!ask || busy) return;
     // O pedido vira uma página nova, e o Claude do Editor roda o pedido ao abrir.
     busy = true;
     try {
-      const p = await api.createPage(titleFrom(t), folderId, JSON.stringify(emptyDoc()));
+      const p = await api.createPage(titleFrom(ask), folderId, JSON.stringify(emptyDoc()));
       await reload();
-      setPending(t);
+      setPending(ask);
       text = '';
       goto(`/editor?id=${p.id}`);
     } catch (e) {
-      store.error = `Não foi possível criar a página. ${message(e)}`;
+      store.error = `${t('Não foi possível criar a página.')} ${message(e)}`;
     } finally {
       busy = false;
     }
@@ -66,14 +67,14 @@
 </script>
 
 <div class="bar" role="group" aria-label="Linke">
-  <label class="visually-hidden" for="agente-pedido">Pedido para Linke</label>
+  <label class="visually-hidden" for="agente-pedido">{t('Pedido para Linke')}</label>
   <div class="ask">
   <span class="mascot"><Linke size={18} /></span>
   <textarea
     id="agente-pedido"
     bind:this={input}
     rows="1"
-    placeholder="O que você quer criar?"
+    placeholder={t('O que você quer criar?')}
     bind:value={text}
     {onkeydown}
     disabled={busy}
@@ -81,13 +82,13 @@
   </div>
 
   <div class="row">
-    <button class="ico" onclick={() => addFiles({ projectId: folderId })} aria-label="Importar arquivos" data-tip="Importar arquivos">
+    <button class="ico" onclick={() => addFiles({ projectId: folderId })} aria-label={t('Importar arquivos')} data-tip={t('Importar arquivos')}>
       <Plus size={16} aria-hidden="true" />
     </button>
     <span class="chip">{context}</span>
     <span class="spacer"></span>
     <ModelPicker id="agente-modelo" />
-    <button class="send" onclick={send} disabled={!text.trim() || busy} aria-label="Enviar" data-tip="Enviar (Enter)">
+    <button class="send" onclick={send} disabled={!text.trim() || busy} aria-label={t('Enviar')} data-tip={t('Enviar (Enter)')}>
       <ArrowUp size={16} aria-hidden="true" />
     </button>
   </div>
@@ -102,16 +103,16 @@
     padding: 6px;
     border: 1px solid var(--line);
     border-radius: 14px;
-    background: #141414;
+    background: color-mix(in srgb, var(--fg) 7.8%, var(--bg));
     box-shadow:
-      0 0 0 1px rgb(255 255 255 / 0.04),
+      0 0 0 1px color-mix(in srgb, var(--fg) 4%, transparent),
       0 1px 2px rgb(0 0 0 / 0.4),
       0 12px 32px rgb(0 0 0 / 0.55);
     transition: border-color 150ms ease-out;
   }
 
   .bar:focus-within {
-    border-color: #4a4a4a;
+    border-color: color-mix(in srgb, var(--fg) 29%, var(--bg));
   }
 
   .ask {
@@ -170,7 +171,7 @@
   }
 
   .ico:hover {
-    background: #262626;
+    background: color-mix(in srgb, var(--fg) 14.9%, var(--bg));
     color: var(--fg);
   }
 
@@ -185,7 +186,7 @@
   }
 
   .send:disabled {
-    background: #2a2a2a;
+    background: color-mix(in srgb, var(--fg) 16.5%, var(--bg));
     color: var(--muted);
     cursor: default;
   }

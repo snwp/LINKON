@@ -3,6 +3,7 @@
  * chamado pelo backend em modo `--print` sem ferramentas. A resposta é texto em JSON Lines: cada linha é uma
  * operação sobre a página, aplicada assim que a linha termina, para a página ir se montando na tela.
  */
+import { t } from '$lib/i18n.svelte';
 import { createElement, emptyImagesUnder, newId, TYPE_LABELS, type Doc, type El, type ElementType } from './doc';
 
 /** Uma linha do registro do painel do assistente. */
@@ -178,29 +179,29 @@ export function applyOp(doc: Doc, op: Op, scope: { markedId: string | null }): s
       const slot = op.type === 'imagem' ? emptyImagesUnder(doc, el)[0] : undefined;
       if (slot) {
         slot.fileId = el.fileId;
-        return `Colocou a imagem em “${slot.name}”`;
+        return t('Colocou a imagem em “{name}”', { name: slot.name });
       }
       doc.elements.push(el);
-      return `Criou ${TYPE_LABELS[el.type].toLowerCase()} “${el.name}”`;
+      return t('Criou {type} “{name}”', { type: t(TYPE_LABELS[el.type]).toLowerCase(), name: el.name });
     }
     case 'update': {
       if (scope.markedId && op.id !== scope.markedId) return null;
       const el = doc.elements.find((e) => e.id === op.id);
       if (!el) return null;
       Object.assign(el, op.props);
-      return `Ajustou “${el.name}”`;
+      return t('Ajustou “{name}”', { name: el.name });
     }
     case 'delete': {
       if (scope.markedId && op.id !== scope.markedId) return null;
       const i = doc.elements.findIndex((e) => e.id === op.id);
       if (i < 0) return null;
       const [el] = doc.elements.splice(i, 1);
-      return `Removeu “${el.name}”`;
+      return t('Removeu “{name}”', { name: el.name });
     }
     case 'page':
       if (scope.markedId) return null;
       Object.assign(doc, op.props);
-      return 'Ajustou a página';
+      return t('Ajustou a página');
   }
 }
 
@@ -245,18 +246,18 @@ export function setAiModel(model: string) {
 
 /** Traduz os erros mais comuns do Claude Code para algo que a pessoa consiga resolver. */
 export function friendlyAiError(raw: string): string {
-  const t = raw.toLowerCase();
-  if (t.includes('não foi encontrado') || t.includes('not found') || t.includes('program not found')) {
-    return 'Não encontrei o Claude Code neste computador. Instale o Claude Code e entre com sua conta; depois tente de novo.';
+  const low = raw.toLowerCase();
+  if (low.includes('não foi encontrado') || low.includes('not found') || low.includes('program not found')) {
+    return t('Não encontrei o Claude Code neste computador. Instale o Claude Code e entre com sua conta; depois tente de novo.');
   }
-  if (t.includes('login') || t.includes('log in') || t.includes('authenticat') || t.includes('api key')) {
-    return 'O Claude Code não está conectado à sua conta. Em Configurações, na seção Assistente de IA, está o comando para entrar.';
+  if (low.includes('login') || low.includes('log in') || low.includes('authenticat') || low.includes('api key')) {
+    return t('O Claude Code não está conectado à sua conta. Em Configurações, na seção Assistente de IA, está o comando para entrar.');
   }
-  if (t.includes('usage limit') || t.includes('rate limit') || t.includes('limit reached')) {
-    return 'O limite de uso da sua assinatura foi atingido por enquanto. Tente de novo mais tarde.';
+  if (low.includes('usage limit') || low.includes('rate limit') || low.includes('limit reached')) {
+    return t('O limite de uso da sua assinatura foi atingido por enquanto. Tente de novo mais tarde.');
   }
-  if (t.includes('cancel')) return 'Pedido interrompido.';
-  return `O assistente não conseguiu responder. ${raw}`.trim();
+  if (low.includes('cancel')) return t('Pedido interrompido.');
+  return `${t('O assistente não conseguiu responder.')} ${raw}`.trim();
 }
 
 /**

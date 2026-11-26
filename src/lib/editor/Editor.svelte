@@ -43,6 +43,7 @@
     type LogEntry,
   } from './assistant';
   import { recordUsage } from '$lib/usage';
+  import { t } from '$lib/i18n.svelte';
 
   /** O pai remonta o editor com {#key page.id}. */
   let { page }: { page: Page } = $props();
@@ -147,7 +148,7 @@
     dirty = false;
     status = 'saving';
     try {
-      const savedTitle = title.trim() || 'Sem título';
+      const savedTitle = title.trim() || t('Sem título');
       const savedDoc = snapshot;
       await api.updatePage(page.id, savedTitle, projectId, savedDoc);
       status = dirty ? 'pending' : 'saved';
@@ -155,7 +156,7 @@
       // O site em Documentos/Linkon acompanha cada salvamento; falhar aqui não desfaz o salvamento.
       siteHtml(savedTitle, parseDoc(savedDoc))
         .then((html) => api.syncSite(page.id, html))
-        .catch((e) => (store.error = `A pasta do site não foi atualizada. ${message(e)}`));
+        .catch((e) => (store.error = `${t('A pasta do site não foi atualizada.')} ${message(e)}`));
     } catch (e) {
       dirty = true;
       status = 'error';
@@ -261,7 +262,7 @@
 
   function duplicate() {
     if (!selected) return;
-    const copy = { ...$state.snapshot(selected), id: Math.random().toString(36).slice(2, 10), x: selected.x + 24, y: selected.y + 24, name: `${selected.name} (cópia)` };
+    const copy = { ...$state.snapshot(selected), id: Math.random().toString(36).slice(2, 10), x: selected.x + 24, y: selected.y + 24, name: t('{name} (cópia)', { name: selected.name }) };
     const i = doc.elements.findIndex((e) => e.id === selected!.id);
     doc.elements.splice(i + 1, 0, copy);
     selectedId = copy.id;
@@ -434,8 +435,8 @@
 
   // ---------- teclado ----------
   function onkeydown(e: KeyboardEvent) {
-    const t = e.target as HTMLElement;
-    if (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)) return;
+    const el = e.target as HTMLElement;
+    if (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) return;
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key.toLowerCase();
     if (mod && k === 'z' && !e.shiftKey) {
@@ -508,7 +509,7 @@
     } else if (pageEl) {
       const r = pageEl.getBoundingClientRect();
       const point = { x: (e.clientX - r.left) / zoom, y: (e.clientY - r.top) / zoom };
-      bubble = { x: e.clientX, y: e.clientY, markedId: null, point, label: `Ponto na página · x ${Math.round(point.x)}, y ${Math.round(point.y)}` };
+      bubble = { x: e.clientX, y: e.clientY, markedId: null, point, label: t('Ponto na página · x {x}, y {y}', { x: Math.round(point.x), y: Math.round(point.y) }) };
     }
   }
 
@@ -587,7 +588,7 @@
         }
         if (r.result) {
           usage = r.result.usage ?? null;
-          if (!r.result.ok) failure = r.result.text || 'erro sem detalhes';
+          if (!r.result.ok) failure = r.result.text || t('erro sem detalhes');
           else if (!sawText) consume(`${r.result.text}\n`);
         }
       });
@@ -597,7 +598,7 @@
     }
     if (buffer.trim()) handleLine(buffer);
     if (failure) aiLog.push({ kind: 'error', text: friendlyAiError(failure) });
-    else if (applied === 0 && said === 0) aiLog.push({ kind: 'ai', text: 'Nada foi alterado.' });
+    else if (applied === 0 && said === 0) aiLog.push({ kind: 'ai', text: t('Nada foi alterado.') });
     // Entra na tela "Uso da IA" (pedidos sem resposta contam como pedido, sem tokens).
     // (o TypeScript não vê que o callback acima preenche `usage`)
     const u = usage as AiUsage | null;
@@ -622,8 +623,8 @@
       background.delete(page.id);
       const here = route.url.pathname === '/editor' && Number(route.url.searchParams.get('id')) === page.id;
       if (!here && getAiNotify()) {
-        const name = title.trim() || 'Sem título';
-        notify(failure ? `Linke parou com erro em “${name}”.` : `Linke terminou “${name}”.`, true, `/editor?id=${page.id}`);
+        const name = title.trim() || t('Sem título');
+        notify(failure ? t('Linke parou com erro em “{name}”.', { name }) : t('Linke terminou “{name}”.', { name }), true, `/editor?id=${page.id}`);
       }
     }
     finished();
@@ -640,34 +641,34 @@
   }
 
   // Só o erro aparece: salvar normalmente não precisa de texto ocupando a barra.
-  let statusText = $derived(status === 'error' ? `Não foi salvo. ${errorText}` : '');
+  let statusText = $derived(status === 'error' ? `${t('Não foi salvo.')} ${errorText}` : '');
 </script>
 
 <svelte:window {onkeydown} {onpointermove} {onpointerup} />
 
 <div class="editor">
   <header class="bar">
-    <a class="btn icon-btn" href="/" aria-label="Voltar ao Início" data-tip="Voltar ao Início"><ArrowLeft size={16} aria-hidden="true" /></a>
-    <label class="visually-hidden" for="pagina-titulo">Título da página</label>
+    <a class="btn icon-btn" href="/" aria-label={t('Voltar ao Início')} data-tip={t('Voltar ao Início')}><ArrowLeft size={16} aria-hidden="true" /></a>
+    <label class="visually-hidden" for="pagina-titulo">{t('Título da página')}</label>
     <input id="pagina-titulo" class="title" bind:value={title} oninput={scheduleSave} maxlength="200" />
     <span class="status mono" class:error={status === 'error'} aria-live="polite">{#if statusText}<span class="swap" in:textSwap>{statusText}</span>{/if}</span>
-    {#if status === 'error'}<button class="btn" onclick={() => flush()}>Tentar de novo</button>{/if}
+    {#if status === 'error'}<button class="btn" onclick={() => flush()}>{t('Tentar de novo')}</button>{/if}
     <div class="spacer"></div>
-    <div class="seg" use:slidingPill role="group" aria-label="Versão da página">
-      <button aria-pressed={view === 'desktop'} onclick={() => switchView('desktop')} data-tip={`Desktop · ${root.width} px`}><Monitor size={14} aria-hidden="true" />Desktop</button>
-      <button aria-pressed={view === 'mobile'} onclick={() => switchView('mobile')} data-tip={root.mobile ? `Mobile · ${root.mobile.width} px` : 'Cria a versão mobile a partir da desktop'}><Smartphone size={14} aria-hidden="true" />Mobile</button>
+    <div class="seg" use:slidingPill role="group" aria-label={t('Versão da página')}>
+      <button aria-pressed={view === 'desktop'} onclick={() => switchView('desktop')} data-tip={t('Desktop · {w} px', { w: root.width })}><Monitor size={14} aria-hidden="true" />Desktop</button>
+      <button aria-pressed={view === 'mobile'} onclick={() => switchView('mobile')} data-tip={root.mobile ? t('Mobile · {w} px', { w: root.mobile.width }) : t('Cria a versão mobile a partir da desktop')}><Smartphone size={14} aria-hidden="true" />Mobile</button>
     </div>
     {#if view === 'mobile'}
-      <button class="btn icon-btn" onclick={removeMobile} aria-label="Remover a versão mobile" data-tip="Remover a versão mobile (Ctrl Z desfaz)"><Trash2 size={14} aria-hidden="true" /></button>
+      <button class="btn icon-btn" onclick={removeMobile} aria-label={t('Remover a versão mobile')} data-tip={t('Remover a versão mobile (Ctrl Z desfaz)')}><Trash2 size={14} aria-hidden="true" /></button>
     {/if}
-    <button class="btn icon-btn" onclick={undo} disabled={!canUndo} aria-label="Desfazer (Ctrl Z)" data-tip="Desfazer (Ctrl Z)"><Undo2 size={16} aria-hidden="true" /></button>
-    <button class="btn icon-btn" onclick={redo} disabled={!canRedo} aria-label="Refazer (Ctrl Y)" data-tip="Refazer (Ctrl Y)"><Redo2 size={16} aria-hidden="true" /></button>
+    <button class="btn icon-btn" onclick={undo} disabled={!canUndo} aria-label={t('Desfazer (Ctrl Z)')} data-tip={t('Desfazer (Ctrl Z)')}><Undo2 size={16} aria-hidden="true" /></button>
+    <button class="btn icon-btn" onclick={redo} disabled={!canRedo} aria-label={t('Refazer (Ctrl Y)')} data-tip={t('Refazer (Ctrl Y)')}><Redo2 size={16} aria-hidden="true" /></button>
     <div class="zoom">
-      <button class="btn icon-btn" onclick={() => setZoom(zoom / 1.2)} aria-label="Diminuir zoom"><Minus size={14} aria-hidden="true" /></button>
-      <button class="btn pct mono" onclick={fit} data-tip="Ajustar à janela">{Math.round(zoom * 100)}%</button>
-      <button class="btn icon-btn" onclick={() => setZoom(zoom * 1.2)} aria-label="Aumentar zoom"><Plus size={14} aria-hidden="true" /></button>
+      <button class="btn icon-btn" onclick={() => setZoom(zoom / 1.2)} aria-label={t('Diminuir zoom')}><Minus size={14} aria-hidden="true" /></button>
+      <button class="btn pct mono" onclick={fit} data-tip={t('Ajustar à janela')}>{Math.round(zoom * 100)}%</button>
+      <button class="btn icon-btn" onclick={() => setZoom(zoom * 1.2)} aria-label={t('Aumentar zoom')}><Plus size={14} aria-hidden="true" /></button>
     </div>
-    <button class="btn" onclick={preview}><Eye size={15} aria-hidden="true" />Visualizar</button>
+    <button class="btn" onclick={preview}><Eye size={15} aria-hidden="true" />{t('Visualizar')}</button>
   </header>
 
   <div class="body" style={`grid-template-columns:${panels.left ? '0' : '240px'} minmax(0, 1fr) ${panels.right ? '0' : '340px'}`}>
@@ -709,7 +710,7 @@
                   {#if src}
                     <img {src} alt="" draggable="false" style={`object-fit:${el.fit ?? 'cover'}`} />
                   {:else}
-                    <span class="placeholder">Arraste uma imagem do painel Inserir para cá</span>
+                    <span class="placeholder">{t('Arraste uma imagem do painel Inserir para cá')}</span>
                   {/if}
                 {:else if el.type === 'referencia' && el.ref}
                   {@const r = refInfo(el.ref)}
@@ -759,12 +760,12 @@
       {/key}
     </div>
     {#if panels.left}
-      <button class="restore left" onclick={() => setPanel('left', false)} data-tip="Mostrar o painel">
-        <PanelLeftOpen size={15} aria-hidden="true" />Camadas
+      <button class="restore left" onclick={() => setPanel('left', false)} data-tip={t('Mostrar o painel')}>
+        <PanelLeftOpen size={15} aria-hidden="true" />{t('Camadas')}
       </button>
     {/if}
     {#if panels.right}
-      <button class="restore right" onclick={() => setPanel('right', false)} data-tip="Mostrar Linke">
+      <button class="restore right" onclick={() => setPanel('right', false)} data-tip={t('Mostrar Linke')}>
         {#if aiRun}<span class="mini-pixels" aria-hidden="true">{#each [0, 1, 2, 3] as i (i)}<span style={`animation-delay:${i * 120}ms`}></span>{/each}</span>{/if}
         <Linke size={15} />Linke
         <PanelRightOpen size={15} aria-hidden="true" />
@@ -777,13 +778,13 @@
         x={bubble.x}
         y={bubble.y}
         label={bubble.label}
-        onsend={(t) => askAi(t, bubble!.markedId, bubble!.point)}
+        onsend={(v) => askAi(v, bubble!.markedId, bubble!.point)}
         onclose={() => (bubble = null)}
       />
     {/if}
 
     <div class="slot right" class:gone={panels.right}>
-      <ClaudePanel log={aiLog} running={aiRun !== null} startedAt={aiStartedAt} {projectId} onsend={(t) => askAi(t)} oncancel={cancelAi} onminimize={() => setPanel('right', true)} />
+      <ClaudePanel log={aiLog} running={aiRun !== null} startedAt={aiStartedAt} {projectId} onsend={(v) => askAi(v)} oncancel={cancelAi} onminimize={() => setPanel('right', true)} />
     </div>
   </div>
 
@@ -895,7 +896,7 @@
     padding: 0 12px;
     border: 1px solid var(--line);
     border-radius: 10px;
-    background: #141414;
+    background: color-mix(in srgb, var(--fg) 7.8%, var(--bg));
     color: var(--fg);
     font: 500 13px var(--font-ui);
     box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
@@ -906,7 +907,7 @@
   }
 
   .restore:hover {
-    border-color: #4a4a4a;
+    border-color: color-mix(in srgb, var(--fg) 29%, var(--bg));
   }
 
   .restore:active {

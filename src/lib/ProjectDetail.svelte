@@ -12,6 +12,7 @@
   import { parseDoc } from '$lib/editor/doc';
   import { flip } from 'svelte/animate';
   import { cardIn, FLIP } from '$lib/motion';
+  import { t } from '$lib/i18n.svelte';
 
   /** Conteúdo de uma pasta: interfaces (páginas do Editor) e arquivos. */
   let { project }: { project: Project } = $props();
@@ -44,7 +45,7 @@
       goto('/projetos');
     } catch (e) {
       confirming = false;
-      store.error = `A pasta não foi excluída. ${message(e)}`;
+      store.error = `${t('A pasta não foi excluída.')} ${message(e)}`;
     }
   }
 
@@ -54,7 +55,7 @@
       confirmFile = null;
       await reload();
     } catch (e) {
-      store.error = `O arquivo não foi excluído. ${message(e)}`;
+      store.error = `${t('O arquivo não foi excluído.')} ${message(e)}`;
     }
   }
 
@@ -76,7 +77,7 @@
     try {
       await api.openFile(f);
     } catch (e) {
-      store.error = `Não foi possível abrir o arquivo. ${message(e)}`;
+      store.error = `${t('Não foi possível abrir o arquivo.')} ${message(e)}`;
     }
   }
 </script>
@@ -86,15 +87,15 @@
   role="presentation"
   oncontextmenu={(e) =>
     openMenu(e, [
-      { label: 'Nova interface', icon: PenTool, run: () => goto(`/editor?projeto=${project.id}`) },
-      { label: 'Adicionar arquivos', icon: Upload, run: () => addFiles({ projectId: project.id }) },
-      { label: 'Renomear pasta', icon: Pencil, run: renameNow },
+      { label: t('Nova interface'), icon: PenTool, run: () => goto(`/editor?projeto=${project.id}`) },
+      { label: t('Adicionar arquivos'), icon: Upload, run: () => addFiles({ projectId: project.id }) },
+      { label: t('Renomear pasta'), icon: Pencil, run: renameNow },
     ])}
 >
   <div class="top">
   <div class="title">
-  <nav class="crumbs" aria-label="Caminho"><a href="/projetos">Pastas</a> <span aria-hidden="true">/</span></nav>
-  <label class="visually-hidden" for="nome-pasta">Nome da pasta</label>
+  <nav class="crumbs" aria-label={t('Caminho')}><a href="/projetos">{t('Pastas')}</a> <span aria-hidden="true">/</span></nav>
+  <label class="visually-hidden" for="nome-pasta">{t('Nome da pasta')}</label>
   <input
     id="nome-pasta"
     class="name"
@@ -109,29 +110,29 @@
 
   <div class="bar">
     {#if confirming}
-      <span class="small">Excluir “{project.name}”? As interfaces continuam no Editor, sem pasta.</span>
-      <button class="btn danger" onclick={remove}>Excluir pasta</button>
-      <button class="btn" onclick={() => (confirming = false)}>Cancelar</button>
+      <span class="small">{t('Excluir “{name}”? As interfaces continuam no Editor, sem pasta.', { name: project.name })}</span>
+      <button class="btn danger" onclick={remove}>{t('Excluir pasta')}</button>
+      <button class="btn" onclick={() => (confirming = false)}>{t('Cancelar')}</button>
     {:else}
-      <button class="btn icon-btn" onclick={() => (confirming = true)} aria-label="Excluir pasta" data-tip="Excluir pasta">
+      <button class="btn icon-btn" onclick={() => (confirming = true)} aria-label={t('Excluir pasta')} data-tip={t('Excluir pasta')}>
         <Trash2 size={14} strokeWidth={1.75} aria-hidden="true" />
       </button>
       <button class="btn" onclick={() => addFiles({ projectId: project.id })}>
         <Upload size={14} strokeWidth={1.75} aria-hidden="true" />
-        Adicionar arquivos
+        {t('Adicionar arquivos')}
       </button>
       <a class="btn primary" href={`/editor?projeto=${project.id}`}>
         <Plus size={16} strokeWidth={2} aria-hidden="true" />
-        Nova interface
+        {t('Nova interface')}
       </a>
     {/if}
   </div>
   </div>
 
   <section class="group">
-  <h2>Interfaces</h2>
+  <h2>{t('Interfaces')}</h2>
   {#if pages.length === 0}
-    <p class="empty">Nenhuma interface ainda.</p>
+    <p class="empty">{t('Nenhuma interface ainda.')}</p>
   {:else}
     <ul class="pages">
       {#each pages as p (p.id)}
@@ -148,22 +149,22 @@
   </section>
 
   <section class="group">
-  <h2>Arquivos</h2>
+  <h2>{t('Arquivos')}</h2>
   {#if files.length === 0}
-    <p class="empty">Nenhum arquivo ainda.</p>
+    <p class="empty">{t('Nenhum arquivo ainda.')}</p>
   {:else}
     <table class="files">
       <thead>
-        <tr><th>Nome</th><th>Tipo</th><th>Tamanho</th><th>Adicionado</th><th><span class="visually-hidden">Ações</span></th></tr>
+        <tr><th>{t('Nome')}</th><th>{t('Tipo')}</th><th>{t('Tamanho')}</th><th>{t('Adicionado')}</th><th><span class="visually-hidden">{t('Ações')}</span></th></tr>
       </thead>
       <tbody>
         {#each files as f (f.id)}
           <tr
             oncontextmenu={(e) =>
               openMenu(e, [
-                { label: 'Abrir', icon: ExternalLink, run: () => openFile(f) },
+                { label: t('Abrir'), icon: ExternalLink, run: () => openFile(f) },
                 { separator: true },
-                { label: 'Excluir arquivo', icon: Trash2, danger: true, confirm: 'Confirmar: excluir de vez', run: () => removeFile(f) },
+                { label: t('Excluir arquivo'), icon: Trash2, danger: true, confirm: t('Confirmar: excluir de vez'), run: () => removeFile(f) },
               ])}
           >
             <td>
@@ -176,17 +177,17 @@
                 <span title={f.name}>{f.name}</span>
               </div>
             </td>
-            <td class="muted">{KIND_LABELS[f.kind].one}</td>
+            <td class="muted">{t(KIND_LABELS[f.kind].one)}</td>
             <td class="muted mono">{bytes(f.size)}</td>
             <td class="muted">{ago(f.imported_at)}</td>
             <td class="actions">
               {#if confirmFile === f.id}
-                <span class="small">Excluir? Interfaces que usam este arquivo ficam sem ele.</span>
-                <button class="btn danger" onclick={() => removeFile(f)}>Excluir</button>
-                <button class="btn" onclick={() => (confirmFile = null)}>Cancelar</button>
+                <span class="small">{t('Excluir? Interfaces que usam este arquivo ficam sem ele.')}</span>
+                <button class="btn danger" onclick={() => removeFile(f)}>{t('Excluir')}</button>
+                <button class="btn" onclick={() => (confirmFile = null)}>{t('Cancelar')}</button>
               {:else}
-                <button class="btn icon-btn" onclick={() => openFile(f)} aria-label={`Abrir ${f.name}`} data-tip="Abrir"><ExternalLink size={14} aria-hidden="true" /></button>
-                <button class="btn icon-btn" onclick={() => (confirmFile = f.id)} aria-label={`Excluir ${f.name}`} data-tip="Excluir"><Trash2 size={14} aria-hidden="true" /></button>
+                <button class="btn icon-btn" onclick={() => openFile(f)} aria-label={t('Abrir {name}', { name: f.name })} data-tip={t('Abrir')}><ExternalLink size={14} aria-hidden="true" /></button>
+                <button class="btn icon-btn" onclick={() => (confirmFile = f.id)} aria-label={t('Excluir {name}', { name: f.name })} data-tip={t('Excluir')}><Trash2 size={14} aria-hidden="true" /></button>
               {/if}
             </td>
           </tr>

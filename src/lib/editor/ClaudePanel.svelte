@@ -11,6 +11,7 @@
   import type { LogEntry } from './assistant';
   import ModelPicker from '$lib/ModelPicker.svelte';
   import Linke from '$lib/Linke.svelte';
+  import { t } from '$lib/i18n.svelte';
 
   type Props = {
     log: LogEntry[];
@@ -52,8 +53,8 @@
 
   $effect(() => {
     if (!running) return;
-    const t = setInterval(() => (now = Date.now()), 100);
-    return () => clearInterval(t);
+    const timer = setInterval(() => (now = Date.now()), 100);
+    return () => clearInterval(timer);
   });
 
   // Acompanha o fim da conversa enquanto a página é montada.
@@ -71,8 +72,8 @@
     input.style.height = `${Math.min(input.scrollHeight, 8 * 20 + 10)}px`;
   });
 
-  function send(t = text) {
-    const v = t.trim();
+  function send(msg = text) {
+    const v = msg.trim();
     if (!v || running) return;
     onsend(v);
     text = '';
@@ -89,7 +90,7 @@
 <aside class="claude" aria-label="Linke" onpointerdown={(e) => e.stopPropagation()}>
   <header>
     <h2><Linke size={18} />Linke</h2>
-    <button class="min" onclick={onminimize} aria-label="Minimizar Linke" data-tip="Minimizar"><PanelRightClose size={15} aria-hidden="true" /></button>
+    <button class="min" onclick={onminimize} aria-label={t('Minimizar Linke')} data-tip={t('Minimizar')}><PanelRightClose size={15} aria-hidden="true" /></button>
   </header>
 
   <ol class="log" bind:this={list} aria-live="polite">
@@ -97,7 +98,7 @@
       <li class="intro">
         <div class="suggest">
           {#each SUGGESTIONS as s (s)}
-            <button onclick={() => send(s)} disabled={running}>{s}</button>
+            <button onclick={() => send(t(s))} disabled={running}>{t(s)}</button>
           {/each}
         </div>
       </li>
@@ -120,7 +121,7 @@
         <span class="pixels" aria-hidden="true">
           {#each [90, 180, 270, 0, 90, 180, 90, 180, 270] as d, i (i)}<span style={`animation-delay:${d}ms`}></span>{/each}
         </span>
-        <span class="breathe">Montando</span>
+        <span class="breathe">{t('Montando')}</span>
         <span class="time mono">{elapsed}s</span>
       </li>
     {/if}
@@ -128,25 +129,25 @@
 
   <div class="compose">
     <div class="box">
-      <label class="visually-hidden" for="claude-pedido">Pedido para Linke</label>
+      <label class="visually-hidden" for="claude-pedido">{t('Pedido para Linke')}</label>
       <textarea
         id="claude-pedido"
         bind:this={input}
         rows="2"
-        placeholder="O que você quer criar ou mudar?"
+        placeholder={t('O que você quer criar ou mudar?')}
         bind:value={text}
         {onkeydown}
       ></textarea>
       <div class="row">
-        <button class="ico" onclick={() => addFiles({ projectId })} aria-label="Importar imagens" data-tip="Importar imagens">
+        <button class="ico" onclick={() => addFiles({ projectId })} aria-label={t('Importar imagens')} data-tip={t('Importar imagens')}>
           <Plus size={16} aria-hidden="true" />
         </button>
         <span class="spacer"></span>
         <ModelPicker id="claude-modelo" />
         {#if running}
-          <button class="send stop" onclick={oncancel} aria-label="Parar" data-tip="Parar"><Square size={12} aria-hidden="true" /></button>
+          <button class="send stop" onclick={oncancel} aria-label={t('Parar')} data-tip={t('Parar')}><Square size={12} aria-hidden="true" /></button>
         {:else}
-          <button class="send" onclick={() => send()} disabled={!text.trim()} aria-label="Enviar" data-tip="Enviar (Enter)">
+          <button class="send" onclick={() => send()} disabled={!text.trim()} aria-label={t('Enviar')} data-tip={t('Enviar (Enter)')}>
             <ArrowUp size={16} aria-hidden="true" />
           </button>
         {/if}
@@ -193,7 +194,7 @@
   }
 
   .min:hover {
-    background: #1f1f1f;
+    background: color-mix(in srgb, var(--fg) 12.2%, var(--bg));
     color: var(--fg);
   }
 
@@ -237,8 +238,8 @@
   }
 
   .suggest button:hover {
-    background: #161616;
-    border-color: #3d3d3d;
+    background: color-mix(in srgb, var(--fg) 8.6%, var(--bg));
+    border-color: color-mix(in srgb, var(--fg) 23.9%, var(--bg));
   }
 
   .suggest button:active {
@@ -250,7 +251,7 @@
     max-width: 88%;
     padding: 7px 12px;
     border-radius: 12px;
-    background: #222;
+    background: color-mix(in srgb, var(--fg) 13.3%, var(--bg));
   }
 
   .scope {
@@ -350,15 +351,15 @@
     padding: 6px;
     border: 1px solid var(--line);
     border-radius: 14px;
-    background: #141414;
+    background: color-mix(in srgb, var(--fg) 7.8%, var(--bg));
     box-shadow:
-      0 0 0 1px rgb(255 255 255 / 0.03),
+      0 0 0 1px color-mix(in srgb, var(--fg) 3%, transparent),
       0 1px 2px rgb(0 0 0 / 0.4);
     transition: border-color 150ms;
   }
 
   .box:focus-within {
-    border-color: #4a4a4a;
+    border-color: color-mix(in srgb, var(--fg) 29%, var(--bg));
   }
 
   textarea {
@@ -406,7 +407,7 @@
   }
 
   .ico:hover {
-    background: #262626;
+    background: color-mix(in srgb, var(--fg) 14.9%, var(--bg));
     color: var(--fg);
   }
 
@@ -416,7 +417,7 @@
   }
 
   .send:disabled {
-    background: #2a2a2a;
+    background: color-mix(in srgb, var(--fg) 16.5%, var(--bg));
     color: var(--muted);
     cursor: default;
   }

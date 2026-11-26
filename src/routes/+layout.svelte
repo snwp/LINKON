@@ -21,6 +21,7 @@
   import { isTauri } from '$lib/api';
   import { store, reload, addFiles, projectName } from '$lib/store.svelte';
   import { flushAll } from '$lib/pending';
+  import { t } from '$lib/i18n.svelte';
 
   let { children } = $props();
 
@@ -72,13 +73,13 @@
    */
   function oncontextmenu(e: MouseEvent) {
     if (e.defaultPrevented) return;
-    const t = e.target as HTMLElement;
-    if (t.closest('input, textarea, select, [contenteditable="true"], [contenteditable="plaintext-only"]')) return;
+    const el = e.target as HTMLElement;
+    if (el.closest('input, textarea, select, [contenteditable="true"], [contenteditable="plaintext-only"]')) return;
     openMenu(e, [
-      { label: 'Nova página', icon: Plus, kbd: 'Ctrl N', run: newPage },
-      { label: 'Nova pasta', icon: FolderPlus, run: () => goto('/projetos?novo=1') },
+      { label: t('Nova página'), icon: Plus, kbd: 'Ctrl N', run: newPage },
+      { label: t('Nova pasta'), icon: FolderPlus, run: () => goto('/projetos?novo=1') },
       { separator: true },
-      { label: 'Buscar', icon: SearchIcon, kbd: 'Ctrl K', run: () => document.getElementById('busca')?.focus() },
+      { label: t('Buscar'), icon: SearchIcon, kbd: 'Ctrl K', run: () => document.getElementById('busca')?.focus() },
     ]);
   }
 
@@ -105,7 +106,7 @@
         if (!ok && !warned) {
           e.preventDefault();
           warned = true;
-          store.error = 'Algumas alterações não foram salvas. Feche de novo para sair mesmo assim.';
+          store.error = t('Algumas alterações não foram salvas. Feche de novo para sair mesmo assim.');
         }
       }),
       // Arrastar arquivos do sistema para qualquer tela importa (as imagens ficam disponíveis no Editor).
@@ -128,12 +129,12 @@
 
 <div class="app">
   <aside class="sidebar">
-    <a class="brand" href="/" aria-label="Linkon, início">linkon</a>
-    <nav aria-label="Principal">
+    <a class="brand" href="/" aria-label={t('Linkon, início')}>linkon</a>
+    <nav aria-label={t('Principal')}>
       {#each nav as item (item.href)}
         <a class="nav-link" href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>
           <item.icon size={16} strokeWidth={1.75} aria-hidden="true" />
-          {item.label}
+          {t(item.label)}
         </a>
       {/each}
     </nav>
@@ -143,7 +144,7 @@
       aria-current={isActive('/configuracoes') ? 'page' : undefined}
     >
       <Settings size={16} strokeWidth={1.75} aria-hidden="true" />
-      Configurações
+      {t('Configurações')}
     </a>
   </aside>
 
@@ -152,12 +153,12 @@
       <Search />
       <button class="btn primary" onclick={newPage}>
         <Plus size={16} strokeWidth={2} aria-hidden="true" />
-        Nova página
+        {t('Nova página')}
       </button>
     </header>
 
     {#if !isTauri}
-      <p class="preview-note">Prévia no navegador. Os dados ficam só nesta aba e somem ao recarregar.</p>
+      <p class="preview-note">{t('Prévia no navegador. Os dados ficam só nesta aba e somem ao recarregar.')}</p>
     {/if}
 
     <!-- Avisos no canto (Transitions.dev — Toast open/close); o erro vem invertido, em branco. -->
@@ -165,7 +166,7 @@
       {#if store.error}
         <div class="toast alert" role="alert" in:toast out:toast={{ closing: true }}>
           <span>{store.error}</span>
-          <button class="x" aria-label="Fechar aviso" onclick={() => (store.error = '')}><X size={14} aria-hidden="true" /></button>
+          <button class="x" aria-label={t('Fechar aviso')} onclick={() => (store.error = '')}><X size={14} aria-hidden="true" /></button>
         </div>
       {/if}
       {#if store.notice}
@@ -176,8 +177,8 @@
           {/if}
           <span>{store.notice}</span>
           {#if store.noticeHref}
-            <a class="btn" href={store.noticeHref} onclick={() => (store.notice = '')}>Abrir</a>
-            <button class="x" aria-label="Fechar aviso" onclick={() => (store.notice = '')}><X size={14} aria-hidden="true" /></button>
+            <a class="btn" href={store.noticeHref} onclick={() => (store.notice = '')}>{t('Abrir')}</a>
+            <button class="x" aria-label={t('Fechar aviso')} onclick={() => (store.notice = '')}><X size={14} aria-hidden="true" /></button>
           {/if}
         </div>
       {/if}
@@ -201,8 +202,7 @@
   <div class="drop" aria-hidden="true">
     <p>
       <Upload size={22} strokeWidth={1.5} />
-      Solte para importar as imagens{#if dropProject && projectName(dropProject)}&nbsp;na pasta
-        “{projectName(dropProject)}”{/if}.
+      {#if dropProject && projectName(dropProject)}{t('Solte para importar as imagens na pasta “{name}”.', { name: projectName(dropProject) ?? '' })}{:else}{t('Solte para importar as imagens.')}{/if}
     </p>
   </div>
 {/if}
@@ -266,15 +266,15 @@
 
   .nav-link:hover {
     color: var(--fg);
-    background: #161616;
+    background: color-mix(in srgb, var(--fg) 8.6%, var(--bg));
   }
 
   .nav-link[aria-current='page'] {
     color: var(--fg);
-    background: #1c1c1c;
+    background: color-mix(in srgb, var(--fg) 11%, var(--bg));
     box-shadow:
       0 0 0 1px var(--line),
-      inset 0 1px 0 rgb(255 255 255 / 0.06);
+      inset 0 1px 0 color-mix(in srgb, var(--fg) 6%, transparent);
   }
 
   .settings {
@@ -360,9 +360,9 @@
     padding: 10px 14px;
     border: 1px solid var(--line);
     border-radius: 12px;
-    background: #141414;
+    background: color-mix(in srgb, var(--fg) 7.8%, var(--bg));
     box-shadow:
-      0 0 0 1px rgb(255 255 255 / 0.04),
+      0 0 0 1px color-mix(in srgb, var(--fg) 4%, transparent),
       0 12px 32px rgb(0 0 0 / 0.55);
     font-size: 13px;
     pointer-events: auto;
@@ -458,7 +458,7 @@
     gap: var(--s3);
     margin: 0;
     padding: var(--s7) 64px;
-    border: 1.5px dashed #6b6b6b;
+    border: 1.5px dashed color-mix(in srgb, var(--fg) 42%, var(--bg));
     border-radius: 16px;
     background: var(--glass);
     backdrop-filter: var(--glass-blur);

@@ -6,6 +6,7 @@
   import { api, message, type ImageRequest } from '$lib/api';
   import { SHAPES, getImagePrefs } from '$lib/imagegen';
   import { TYPE_LABELS, type Doc, type ElementType, type El } from './doc';
+  import { t } from '$lib/i18n.svelte';
 
   type Props = {
     doc: Doc;
@@ -131,8 +132,8 @@
 
   $effect(() => {
     if (!genStarted) return;
-    const t = setInterval(() => (genNow = Date.now()), 500);
-    return () => clearInterval(t);
+    const timer = setInterval(() => (genNow = Date.now()), 500);
+    return () => clearInterval(timer);
   });
 
   async function generate() {
@@ -148,7 +149,7 @@
       // A imagem já está guardada na pasta; só entra na página se o editor ainda estiver aberto.
       if (alive) insert('imagem', { fileId: file.id, name: file.name, w: shape.w, h: shape.h });
       genPrompt = '';
-      notify('Imagem gerada.');
+      notify(t('Imagem gerada.'));
     } catch (e) {
       const m = message(e);
       if (m !== 'cancelado') genError = m;
@@ -164,19 +165,19 @@
   }
 </script>
 
-<aside class="panel" aria-label="Painel do editor">
+<aside class="panel" aria-label={t('Painel do editor')}>
   <div class="head">
     <div class="tabs" use:slidingPill role="tablist">
-      <button role="tab" aria-selected={tab === 'camadas'} onclick={() => (tab = 'camadas')}>Camadas</button>
-      <button role="tab" aria-selected={tab === 'inserir'} onclick={() => (tab = 'inserir')}>Inserir</button>
-      <button role="tab" aria-selected={tab === 'paginas'} onclick={() => (tab = 'paginas')}>Páginas</button>
+      <button role="tab" aria-selected={tab === 'camadas'} onclick={() => (tab = 'camadas')}>{t('Camadas')}</button>
+      <button role="tab" aria-selected={tab === 'inserir'} onclick={() => (tab = 'inserir')}>{t('Inserir')}</button>
+      <button role="tab" aria-selected={tab === 'paginas'} onclick={() => (tab = 'paginas')}>{t('Páginas')}</button>
     </div>
-    <button class="min" onclick={onminimize} aria-label="Minimizar o painel" data-tip="Minimizar"><PanelLeftClose size={15} aria-hidden="true" /></button>
+    <button class="min" onclick={onminimize} aria-label={t('Minimizar o painel')} data-tip={t('Minimizar')}><PanelLeftClose size={15} aria-hidden="true" /></button>
   </div>
 
   {#if tab === 'camadas'}
     {#if layers.length === 0}
-      <p class="hint">Página vazia.</p>
+      <p class="hint">{t('Página vazia.')}</p>
     {:else}
       <ul class="layers">
         {#each layers as { e, i }, row (e.id)}
@@ -203,7 +204,7 @@
               <Icon size={13} strokeWidth={1.75} aria-hidden="true" />
               <span>{e.name}</span>
             </button>
-            <button class="icon" aria-label={e.hidden ? `Mostrar ${e.name}` : `Esconder ${e.name}`} onclick={() => toggle(e)}>
+            <button class="icon" aria-label={e.hidden ? t('Mostrar {name}', { name: e.name }) : t('Esconder {name}', { name: e.name })} onclick={() => toggle(e)}>
               {#if e.hidden}<EyeOff size={13} aria-hidden="true" />{:else}<Eye size={13} aria-hidden="true" />{/if}
             </button>
           </li>
@@ -212,31 +213,31 @@
     {/if}
   {:else if tab === 'inserir'}
     <section>
-      <h3>Elementos</h3>
+      <h3>{t('Elementos')}</h3>
       <div class="basic">
-        {#each BASIC as t (t)}
-          {@const Icon = ICON[t]}
+        {#each BASIC as ty (ty)}
+          {@const Icon = ICON[ty]}
           <button
             class="add"
-            onpointerdown={(e) => grab(e, { type: t, extra: {}, label: TYPE_LABELS[t] })}
-            onclick={(e) => e.detail === 0 && insert(t)}
+            onpointerdown={(e) => grab(e, { type: ty, extra: {}, label: t(TYPE_LABELS[ty]) })}
+            onclick={(e) => e.detail === 0 && insert(ty)}
           >
             <Icon size={16} strokeWidth={1.5} aria-hidden="true" />
-            {TYPE_LABELS[t]}
+            {t(TYPE_LABELS[ty])}
           </button>
         {/each}
       </div>
     </section>
 
     <section aria-labelledby="gerar-titulo">
-      <h3 id="gerar-titulo">Gerar imagem</h3>
-      <label class="visually-hidden" for="gerar-descricao">Descrição da imagem</label>
+      <h3 id="gerar-titulo">{t('Gerar imagem')}</h3>
+      <label class="visually-hidden" for="gerar-descricao">{t('Descrição da imagem')}</label>
       <textarea
         id="gerar-descricao"
         class="field gen-text"
         rows="3"
         maxlength="4000"
-        placeholder="Descreva a imagem"
+        placeholder={t('Descreva a imagem')}
         bind:value={genPrompt}
         disabled={!!genStarted}
         onkeydown={(e) => {
@@ -246,20 +247,20 @@
           }
         }}
       ></textarea>
-      <div class="seg gen-shape" use:slidingPill role="group" aria-label="Formato">
+      <div class="seg gen-shape" use:slidingPill role="group" aria-label={t('Formato')}>
         {#each SHAPES as s (s.id)}
-          <button aria-pressed={genShape === s.id} onclick={() => (genShape = s.id)} disabled={!!genStarted}>{s.label}</button>
+          <button aria-pressed={genShape === s.id} onclick={() => (genShape = s.id)} disabled={!!genStarted}>{t(s.label)}</button>
         {/each}
       </div>
       {#if genStarted}
         <div class="gen-run" role="status">
-          <span class="breathe">Gerando</span>
+          <span class="breathe">{t('Gerando')}</span>
           <span class="mono gen-time">{Math.max(0, Math.round((genNow - genStarted) / 1000))}s</span>
-          <button class="btn small-btn" onclick={() => api.cancelImage()}>Parar</button>
+          <button class="btn small-btn" onclick={() => api.cancelImage()}>{t('Parar')}</button>
         </div>
       {:else}
         <button class="btn primary small-btn" onclick={generate} disabled={!genPrompt.trim()}>
-          <ImagePlus size={13} aria-hidden="true" />Gerar
+          <ImagePlus size={13} aria-hidden="true" />{t('Gerar')}
         </button>
       {/if}
       {#if genError}<p class="error-text gen-error">{genError}</p>{/if}
@@ -267,11 +268,11 @@
 
     <section>
       <div class="sec-head">
-        <h3>{projectId ? 'Imagens da pasta' : 'Imagens'}</h3>
-        <button class="btn small-btn" onclick={() => addFiles({ projectId })}><Upload size={13} aria-hidden="true" />Importar</button>
+        <h3>{projectId ? t('Imagens da pasta') : t('Imagens')}</h3>
+        <button class="btn small-btn" onclick={() => addFiles({ projectId })}><Upload size={13} aria-hidden="true" />{t('Importar')}</button>
       </div>
       {#if images.length === 0}
-        <p class="hint">Nenhuma imagem ainda.</p>
+        <p class="hint">{t('Nenhuma imagem ainda.')}</p>
       {:else}
         <div class="thumbs">
           {#each images as f (f.id)}
@@ -293,7 +294,7 @@
         <li><a href={`/editor?id=${p.id}`} aria-current={p.id === pageId ? 'page' : undefined}>{p.title}</a></li>
       {/each}
     </ul>
-    <a class="all" href="/editor?novo=1">Nova página</a>
+    <a class="all" href="/editor?novo=1">{t('Nova página')}</a>
   {/if}
 </aside>
 
@@ -311,9 +312,9 @@
     left: 0;
     z-index: 200;
     padding: 6px 10px;
-    border: 1px solid #4a4a4a;
+    border: 1px solid color-mix(in srgb, var(--fg) 29%, var(--bg));
     border-radius: 8px;
-    background: #1c1c1c;
+    background: color-mix(in srgb, var(--fg) 11%, var(--bg));
     color: var(--fg);
     font: 500 12px var(--font-ui);
     box-shadow: 0 10px 28px rgb(0 0 0 / 0.55);
@@ -365,7 +366,7 @@
   }
 
   .min:hover {
-    background: #1f1f1f;
+    background: color-mix(in srgb, var(--fg) 12.2%, var(--bg));
     color: var(--fg);
   }
 
@@ -376,7 +377,7 @@
     padding: 3px;
     border: 1px solid var(--line);
     border-radius: 10px;
-    background: #0a0a0a;
+    background: color-mix(in srgb, var(--fg) 3.9%, var(--bg));
   }
 
   .tabs button {

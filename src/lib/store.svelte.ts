@@ -8,6 +8,7 @@ import {
   type Picked,
   type Project,
 } from './api';
+import { t } from './i18n.svelte';
 
 /** Tudo o que as telas mostram. Recarregado depois de cada alteração. */
 export const store = $state({
@@ -35,7 +36,7 @@ export async function reload() {
     ]);
     Object.assign(store, { ideas, projects, files, pages, ideaLinks, loaded: true });
   } catch (e) {
-    store.error = `Não foi possível carregar seus dados. ${message(e)}`;
+    store.error = `${t('Não foi possível carregar seus dados.')} ${message(e)}`;
   }
 }
 
@@ -61,19 +62,19 @@ export async function addFiles(target: ImportTarget = {}, picked?: Picked): Prom
   try {
     const chosen = picked ?? (await api.pickFiles());
     if (!chosen || chosen.length === 0) return [];
-    notify(chosen.length === 1 ? 'Importando 1 arquivo…' : `Importando ${chosen.length} arquivos…`, true);
+    notify(chosen.length === 1 ? t('Importando 1 arquivo…') : t('Importando {n} arquivos…', { n: chosen.length }), true);
     const report = await api.importFiles(chosen, target);
     await reload();
     const n = report.imported.length;
     if (n === 0) store.notice = '';
-    else notify(n === 1 ? '1 arquivo importado.' : `${n} arquivos importados.`);
+    else notify(n === 1 ? t('1 arquivo importado.') : t('{n} arquivos importados.', { n }));
     if (report.failed.length) {
-      store.error = `Não foi possível adicionar: ${report.failed.map((f) => `${f.name} (${f.reason})`).join('; ')}`;
+      store.error = `${t('Não foi possível adicionar:')} ${report.failed.map((f) => `${f.name} (${f.reason})`).join('; ')}`;
     }
     return report.imported;
   } catch (e) {
     store.notice = '';
-    store.error = `A importação falhou. ${message(e)}`;
+    store.error = `${t('A importação falhou.')} ${message(e)}`;
     return [];
   }
 }

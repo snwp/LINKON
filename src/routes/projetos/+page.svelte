@@ -12,6 +12,7 @@
   import { flip } from 'svelte/animate';
   import { FLIP } from '$lib/motion';
   import ProjectDetail from '$lib/ProjectDetail.svelte';
+  import { t } from '$lib/i18n.svelte';
 
   // Pastas são os projetos do banco: cada uma guarda arquivos e interfaces (páginas do Editor).
   let projectId = $derived(Number(page.url.searchParams.get('id')) || null);
@@ -84,22 +85,22 @@
   /** Atalhos do botão direito sobre uma pasta. */
   function folderItems(p: Project): MenuItem[] {
     return [
-      { label: 'Abrir', icon: FolderOpen, run: () => goto(`/projetos?id=${p.id}`) },
-      { label: 'Nova interface nesta pasta', icon: PenTool, run: () => goto(`/editor?projeto=${p.id}`) },
-      { label: 'Adicionar arquivos', icon: Upload, run: () => addFiles({ projectId: p.id }) },
-      { label: 'Renomear', icon: Pencil, run: () => goto(`/projetos?id=${p.id}&renomear=1`) },
+      { label: t('Abrir'), icon: FolderOpen, run: () => goto(`/projetos?id=${p.id}`) },
+      { label: t('Nova interface nesta pasta'), icon: PenTool, run: () => goto(`/editor?projeto=${p.id}`) },
+      { label: t('Adicionar arquivos'), icon: Upload, run: () => addFiles({ projectId: p.id }) },
+      { label: t('Renomear'), icon: Pencil, run: () => goto(`/projetos?id=${p.id}&renomear=1`) },
       { separator: true },
       {
-        label: 'Excluir pasta',
+        label: t('Excluir pasta'),
         icon: Trash2,
         danger: true,
-        confirm: 'Confirmar: excluir a pasta',
+        confirm: t('Confirmar: excluir a pasta'),
         run: async () => {
           try {
             await api.deleteProject(p.id);
             await reload();
           } catch (err) {
-            store.error = `A pasta não foi excluída. ${message(err)}`;
+            store.error = `${t('A pasta não foi excluída.')} ${message(err)}`;
           }
         },
       },
@@ -136,6 +137,23 @@
   }
 </script>
 
+{#snippet createForm()}
+  <form class="create" onsubmit={create} use:shakeOn={formError}>
+    <label class="visually-hidden" for="nova-pasta">{t('Nome da nova pasta')}</label>
+    <input
+      id="nova-pasta"
+      class="field"
+      placeholder={t('Nome da pasta')}
+      maxlength="120"
+      bind:value={newName}
+      bind:this={nameInput}
+      onkeydown={(e) => e.key === 'Escape' && ((creating = false), (newName = ''))}
+    />
+    <button class="btn primary" type="submit" disabled={busy || !newName.trim()}>{t('Criar')}</button>
+    <button class="btn" type="button" onclick={() => ((creating = false), (newName = ''))}>{t('Cancelar')}</button>
+  </form>
+{/snippet}
+
 <div class="folders">
   <section class="main">
     {#if projectId}
@@ -145,8 +163,8 @@
         {/key}
       {:else if store.loaded}
         <div class="pad">
-          <p>Esta pasta não existe mais.</p>
-          <a href="/projetos">Ver pastas</a>
+          <p>{t('Esta pasta não existe mais.')}</p>
+          <a href="/projetos">{t('Ver pastas')}</a>
         </div>
       {/if}
     {:else}
@@ -154,34 +172,26 @@
         class="pad"
         role="presentation"
         oncontextmenu={(e) =>
-          openMenu(e, [{ label: 'Nova pasta', icon: FolderPlus, run: startCreate }, { separator: true }, ...viewItems('folderSize', 'folderOrder', 'pastas')])}
+          openMenu(e, [{ label: t('Nova pasta'), icon: FolderPlus, run: startCreate }, { separator: true }, ...viewItems('folderSize', 'folderOrder', t('pastas'))])}
       >
         <div class="head">
-          <h1>Pastas</h1>
-          {#if creating}
-            <form class="create" onsubmit={create} use:shakeOn={formError}>
-              <label class="visually-hidden" for="nova-pasta">Nome da nova pasta</label>
-              <input
-                id="nova-pasta"
-                class="field"
-                placeholder="Nome da pasta"
-                maxlength="120"
-                bind:value={newName}
-                bind:this={nameInput}
-                onkeydown={(e) => e.key === 'Escape' && ((creating = false), (newName = ''))}
-              />
-              <button class="btn primary" type="submit" disabled={busy || !newName.trim()}>Criar</button>
-              <button class="btn" type="button" onclick={() => ((creating = false), (newName = ''))}>Cancelar</button>
-            </form>
+          <h1>{t('Pastas')}</h1>
+          {#if creating && store.projects.length}
+            {@render createForm()}
           {:else if store.projects.length}
-            <button class="btn" onclick={startCreate}><Plus size={16} aria-hidden="true" />Nova pasta</button>
+            <button class="btn" onclick={startCreate}><Plus size={16} aria-hidden="true" />{t('Nova pasta')}</button>
           {/if}
         </div>
         {#if formError}<p class="error-text">{formError}</p>{/if}
         {#if store.loaded && store.projects.length === 0}
-          {#if !creating}<div class="empty-state">
-            <button class="btn primary" onclick={startCreate}><Plus size={16} aria-hidden="true" />Criar a primeira pasta</button>
-          </div>{/if}
+          <!-- O formulário toma o lugar do botão, para nada mudar de posição. -->
+          <div class="empty-state">
+            {#if creating}
+              {@render createForm()}
+            {:else}
+              <button class="btn primary" onclick={startCreate}><Plus size={16} aria-hidden="true" />{t('Criar a primeira pasta')}</button>
+            {/if}
+          </div>
         {:else}
           <ul class="grid" style={`--k:${SCALE[view.folderSize]}`}>
             {#each folders as p (p.id)}
@@ -196,7 +206,7 @@
                     <span class="front"></span>
                   </span>
                   <span class="card-name">{p.name}</span>
-                  <span class="muted small">{n === 1 ? '1 item' : `${n} itens`}</span>
+                  <span class="muted small">{n === 1 ? t('1 item') : t('{n} itens', { n })}</span>
                 </a>
               </li>
             {/each}
@@ -331,7 +341,7 @@
     position: absolute;
     inset: 12px 0 0;
     border-radius: 6px 10px 10px 10px;
-    background: #2a2a2a;
+    background: color-mix(in srgb, var(--fg) 16.5%, var(--bg));
   }
 
   .back::before {
@@ -342,7 +352,7 @@
     width: 64px;
     height: 16px;
     border-radius: 6px 6px 0 0;
-    background: #2a2a2a;
+    background: color-mix(in srgb, var(--fg) 16.5%, var(--bg));
   }
 
   .sheet {
@@ -366,8 +376,8 @@
     position: absolute;
     inset: 46px 0 0;
     border-radius: 8px 8px 10px 10px;
-    background: #3a3a3a;
-    box-shadow: 0 -1px 0 #4a4a4a;
+    background: color-mix(in srgb, var(--fg) 22.7%, var(--bg));
+    box-shadow: 0 -1px 0 color-mix(in srgb, var(--fg) 29%, var(--bg));
     transform-origin: 50% 100%;
   }
 

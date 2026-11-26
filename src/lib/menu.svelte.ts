@@ -7,6 +7,7 @@ import { goto } from '$app/navigation';
 import { PenLine, Eye, Copy, Trash2 } from '@lucide/svelte';
 import { api, message, type Page } from '$lib/api';
 import { store, reload } from '$lib/store.svelte';
+import { locale, t } from '$lib/i18n.svelte';
 
 export type MenuItem =
   | {
@@ -57,32 +58,32 @@ export function closeMenu() {
 /** Atalhos do botão direito sobre uma interface (Início e pastas). */
 export function pageItems(p: Page): MenuItem[] {
   return [
-    { label: 'Abrir no Editor', icon: PenLine, run: () => goto(`/editor?id=${p.id}`) },
-    { label: 'Visualizar', icon: Eye, run: () => goto(`/visualizar?id=${p.id}`) },
+    { label: t('Abrir no Editor'), icon: PenLine, run: () => goto(`/editor?id=${p.id}`) },
+    { label: t('Visualizar'), icon: Eye, run: () => goto(`/visualizar?id=${p.id}`) },
     {
-      label: 'Duplicar',
+      label: t('Duplicar'),
       icon: Copy,
       run: async () => {
         try {
-          await api.createPage(`${p.title} (cópia)`, p.project_id, p.doc);
+          await api.createPage(t('{title} (cópia)', { title: p.title }), p.project_id, p.doc);
           await reload();
         } catch (e) {
-          store.error = `A interface não foi duplicada. ${message(e)}`;
+          store.error = `${t('A interface não foi duplicada.')} ${message(e)}`;
         }
       },
     },
     { separator: true },
     {
-      label: 'Excluir interface',
+      label: t('Excluir interface'),
       icon: Trash2,
       danger: true,
-      confirm: 'Confirmar: excluir de vez',
+      confirm: t('Confirmar: excluir de vez'),
       run: async () => {
         try {
           await api.deletePage(p.id);
           await reload();
         } catch (e) {
-          store.error = `A interface não foi excluída. ${message(e)}`;
+          store.error = `${t('A interface não foi excluída.')} ${message(e)}`;
         }
       },
     },
@@ -118,7 +119,7 @@ const DEFAULTS: Prefs = {
  */
 export function ordered<T extends { id: number; updated_at: number }>(items: T[], order: Order, name: (x: T) => string, manual: number[]): T[] {
   const byRecent = [...items].sort((a, b) => b.updated_at - a.updated_at);
-  if (order === 'name') return [...items].sort((a, b) => name(a).localeCompare(name(b), 'pt-BR'));
+  if (order === 'name') return [...items].sort((a, b) => name(a).localeCompare(name(b), locale()));
   if (order !== 'manual') return byRecent;
   const pos = new Map(manual.map((id, i) => [id, i]));
   return [...byRecent.filter((x) => !pos.has(x.id)), ...byRecent.filter((x) => pos.has(x.id)).sort((a, b) => pos.get(a.id)! - pos.get(b.id)!)];
@@ -151,20 +152,21 @@ export function setView<K extends keyof Prefs>(key: K, value: Prefs[K]) {
   }
 }
 
+/** Textos em português; quem exibe passa por t(). */
 export const SIZE_LABELS: Record<Size, string> = { s: 'Pequenas', m: 'Médias', l: 'Grandes' };
 
 /** Itens prontos de tamanho e ordem, usados no Início e em Pastas. */
 export function viewItems(sizeKey: 'folderSize' | 'homeSize', orderKey: 'folderOrder' | 'homeOrder', what: string): MenuItem[] {
   return [
-    { heading: `Tamanho das ${what}` },
+    { heading: t('Tamanho das {what}', { what }) },
     ...(['s', 'm', 'l'] as Size[]).map((s) => ({
-      label: SIZE_LABELS[s],
+      label: t(SIZE_LABELS[s]),
       checked: view[sizeKey] === s,
       run: () => setView(sizeKey, s),
     })),
-    { heading: 'Ordenar' },
-    { label: 'Mais recentes primeiro', checked: view[orderKey] === 'recent', run: () => setView(orderKey, 'recent') },
-    { label: 'Por nome', checked: view[orderKey] === 'name', run: () => setView(orderKey, 'name') },
-    { label: 'Manual (arrastar)', checked: view[orderKey] === 'manual', run: () => setView(orderKey, 'manual') },
+    { heading: t('Ordenar') },
+    { label: t('Mais recentes primeiro'), checked: view[orderKey] === 'recent', run: () => setView(orderKey, 'recent') },
+    { label: t('Por nome'), checked: view[orderKey] === 'name', run: () => setView(orderKey, 'name') },
+    { label: t('Manual (arrastar)'), checked: view[orderKey] === 'manual', run: () => setView(orderKey, 'manual') },
   ];
 }

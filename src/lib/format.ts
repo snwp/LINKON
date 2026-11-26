@@ -1,4 +1,5 @@
-const rtf = new Intl.RelativeTimeFormat('pt-BR', { numeric: 'auto' });
+import { locale, t } from './i18n.svelte';
+
 
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 31_536_000],
@@ -8,8 +9,6 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['hour', 3_600],
   ['minute', 60],
 ];
-
-const sizeFmt = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
 
 /** "820 B", "12 KB", "1,4 MB". */
 export function bytes(n: number): string {
@@ -21,7 +20,7 @@ export function bytes(n: number): string {
     v /= 1024;
     i++;
   }
-  return `${sizeFmt.format(v)} ${units[i]}`;
+  return `${new Intl.NumberFormat(locale(), { maximumFractionDigits: 1 }).format(v)} ${units[i]}`;
 }
 
 /** Rótulos das categorias da Biblioteca, na ordem do briefing. */
@@ -37,7 +36,7 @@ export const KIND_LABELS = {
 export function ago(ms: number): string {
   const s = (ms - Date.now()) / 1000;
   for (const [unit, size] of UNITS) {
-    if (Math.abs(s) >= size) return rtf.format(Math.round(s / size), unit);
+    if (Math.abs(s) >= size) return new Intl.RelativeTimeFormat(locale(), { numeric: 'auto' }).format(Math.round(s / size), unit);
   }
-  return 'agora';
+  return t('agora');
 }

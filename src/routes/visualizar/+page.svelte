@@ -9,6 +9,7 @@
   import { renderHtml } from '$lib/editor/render';
   import { refInfo } from '$lib/editor/refs';
   import { fontCss } from '$lib/editor/fonts';
+  import { t } from '$lib/i18n.svelte';
 
   let pageId = $derived(Number(page.url.searchParams.get('id')) || null);
   let current = $derived(store.pages.find((p) => p.id === pageId) ?? null);
@@ -60,7 +61,7 @@
     try {
       await api.openInBrowser(current.id, await siteHtml(current.title, doc));
     } catch (e) {
-      store.error = `Não foi possível abrir no navegador. ${message(e)}`;
+      store.error = `${t('Não foi possível abrir no navegador.')} ${message(e)}`;
     } finally {
       busy = '';
     }
@@ -79,7 +80,7 @@
     try {
       check = await api.preparePublish(current.id, await siteHtml(current.title, doc));
     } catch (e) {
-      store.error = `A revisão antes de publicar falhou. ${message(e)}`;
+      store.error = `${t('A revisão antes de publicar falhou.')} ${message(e)}`;
     } finally {
       busy = '';
     }
@@ -91,7 +92,7 @@
     try {
       published = await api.publishSite(current.id);
       check = null;
-      notify('Site publicado.');
+      notify(t('Site publicado.'));
     } catch (e) {
       store.error = message(e);
     } finally {
@@ -103,37 +104,37 @@
 {#if current && doc && frame}
   <div class="preview">
     <header class="bar">
-      <a class="btn" href={`/editor?id=${current.id}${view === 'mobile' ? '&v=mobile' : ''}`}><PenLine size={14} aria-hidden="true" />Voltar ao editor</a>
+      <a class="btn" href={`/editor?id=${current.id}${view === 'mobile' ? '&v=mobile' : ''}`}><PenLine size={14} aria-hidden="true" />{t('Voltar ao editor')}</a>
       <h1>{current.title}</h1>
       <div class="spacer"></div>
       {#if doc.mobile}
-        <div class="seg" use:slidingPill role="group" aria-label="Versão da página">
+        <div class="seg" use:slidingPill role="group" aria-label={t('Versão da página')}>
           <button aria-pressed={view === 'desktop'} onclick={() => (view = 'desktop')}><Monitor size={14} aria-hidden="true" />Desktop</button>
           <button aria-pressed={view === 'mobile'} onclick={() => (view = 'mobile')}><Smartphone size={14} aria-hidden="true" />Mobile</button>
         </div>
       {/if}
-      <div class="seg" use:slidingPill role="group" aria-label="Tamanho da visualização">
-        <button aria-pressed={mode === 'ajustar'} onclick={() => (mode = 'ajustar')}>Ajustar à janela</button>
-        <button aria-pressed={mode === 'real'} onclick={() => (mode = 'real')}>Tamanho real</button>
+      <div class="seg" use:slidingPill role="group" aria-label={t('Tamanho da visualização')}>
+        <button aria-pressed={mode === 'ajustar'} onclick={() => (mode = 'ajustar')}>{t('Ajustar à janela')}</button>
+        <button aria-pressed={mode === 'real'} onclick={() => (mode = 'real')}>{t('Tamanho real')}</button>
       </div>
-      <div class="seg" use:slidingPill role="group" aria-label="Fundo ao redor da página">
-        <button aria-pressed={backdrop === 'escuro'} onclick={() => (backdrop = 'escuro')}>Fundo escuro</button>
-        <button aria-pressed={backdrop === 'claro'} onclick={() => (backdrop = 'claro')}>Fundo claro</button>
+      <div class="seg" use:slidingPill role="group" aria-label={t('Fundo ao redor da página')}>
+        <button aria-pressed={backdrop === 'escuro'} onclick={() => (backdrop = 'escuro')}>{t('Fundo escuro')}</button>
+        <button aria-pressed={backdrop === 'claro'} onclick={() => (backdrop = 'claro')}>{t('Fundo claro')}</button>
       </div>
       <div class="actions">
         <button class="btn" onclick={openBrowser} disabled={!!busy}>
-          <Globe size={14} aria-hidden="true" />{busy === 'browser' ? 'Abrindo…' : 'Ver no navegador'}
+          <Globe size={14} aria-hidden="true" />{busy === 'browser' ? t('Abrindo…') : t('Ver no navegador')}
         </button>
         <button class="btn primary" onclick={review} disabled={!!busy}>
-          <Rocket size={14} aria-hidden="true" />{busy === 'review' ? 'Revisando…' : 'Publicar'}
+          <Rocket size={14} aria-hidden="true" />{busy === 'review' ? t('Revisando…') : t('Publicar')}
         </button>
       </div>
     </header>
 
     {#if check}
       <div class="publish" role="alertdialog" aria-labelledby="pub-title">
-        <h2 id="pub-title">Publicar na Vercel como <span class="mono">{check.name}</span>?</h2>
-        <p>O site fica no ar para qualquer pessoa com o endereço. Publicar de novo troca a versão publicada.</p>
+        <h2 id="pub-title">{t('Publicar na Vercel como')} <span class="mono">{check.name}</span>?</h2>
+        <p>{t('O site fica no ar para qualquer pessoa com o endereço. Publicar de novo troca a versão publicada.')}</p>
         {#if check.findings.length}
           <ul class="findings">
             {#each check.findings as f (f.text)}
@@ -144,26 +145,26 @@
             {/each}
           </ul>
         {:else}
-          <p class="muted">A revisão de segurança não achou problemas.</p>
+          <p class="muted">{t('A revisão de segurança não achou problemas.')}</p>
         {/if}
         {#if !check.vercel.installed}
-          <p>A CLI da Vercel não está instalada. Rode <code class="mono">npm i -g vercel</code> e depois <code class="mono">vercel login</code>.</p>
+          <p>{t('A CLI da Vercel não está instalada. Rode')} <code class="mono">npm i -g vercel</code> {t('e depois')} <code class="mono">vercel login</code>.</p>
         {:else if !check.vercel.user}
-          <p>A CLI da Vercel está sem conta. Rode <code class="mono">vercel login</code> num terminal.</p>
+          <p>{t('A CLI da Vercel está sem conta. Rode')} <code class="mono">vercel login</code> {t('num terminal.')}</p>
         {:else}
-          <p class="muted">Conta da Vercel: {check.vercel.user}</p>
+          <p class="muted">{t('Conta da Vercel:')} {check.vercel.user}</p>
         {/if}
         <div class="row">
-          <button class="btn primary" onclick={publish} disabled={!canPublish || !!busy}>{busy === 'publish' ? 'Publicando…' : 'Publicar agora'}</button>
-          <button class="btn" onclick={() => (check = null)} disabled={busy === 'publish'}>Cancelar</button>
+          <button class="btn primary" onclick={publish} disabled={!canPublish || !!busy}>{busy === 'publish' ? t('Publicando…') : t('Publicar agora')}</button>
+          <button class="btn" onclick={() => (check = null)} disabled={busy === 'publish'}>{t('Cancelar')}</button>
         </div>
       </div>
     {/if}
     {#if published}
       <div class="publish done" role="status">
-        <span>Publicado em <span class="mono">{published}</span></span>
-        <button class="btn" onclick={() => api.openPublished(published)}><ExternalLink size={14} aria-hidden="true" />Abrir site</button>
-        <button class="btn" onclick={() => (published = '')}>Fechar</button>
+        <span>{t('Publicado em')} <span class="mono">{published}</span></span>
+        <button class="btn" onclick={() => api.openPublished(published)}><ExternalLink size={14} aria-hidden="true" />{t('Abrir site')}</button>
+        <button class="btn" onclick={() => (published = '')}>{t('Fechar')}</button>
       </div>
     {/if}
 
@@ -172,7 +173,7 @@
       {#key view}
         <div class="frame-box" in:frameIn style={`width:${frame.width * scale}px;height:${frame.height * scale}px`}>
           <iframe
-            title={`Visualização de ${current.title}`}
+            title={t('Visualização de {title}', { title: current.title })}
             srcdoc={html}
             sandbox="allow-same-origin allow-popups"
             style={`width:${frame.width}px;height:${frame.height}px;transform:scale(${scale})`}
@@ -183,8 +184,8 @@
   </div>
 {:else if store.loaded}
   <div class="missing">
-    <p>Página não encontrada.</p>
-    <a href="/">Voltar ao Início</a>
+    <p>{t('Página não encontrada.')}</p>
+    <a href="/">{t('Voltar ao Início')}</a>
   </div>
 {/if}
 

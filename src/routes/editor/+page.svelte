@@ -9,6 +9,7 @@
   import { emptyDoc, parseDoc } from '$lib/editor/doc';
   import Editor from '$lib/editor/Editor.svelte';  import Thumb from '$lib/editor/Thumb.svelte';
   import { TEMPLATES, templateDoc, type Template } from '$lib/editor/layouts';
+  import { t } from '$lib/i18n.svelte';
 
   let pageId = $derived(Number(page.url.searchParams.get('id')) || null);
   let current = $derived(store.pages.find((p) => p.id === pageId) ?? null);
@@ -28,7 +29,7 @@
   let busy = $state(false);
   let confirmDelete = $state<number | null>(null);
   // Gerados uma vez só para as miniaturas; ao criar, o modelo é gerado de novo (ids novos).
-  const previews = TEMPLATES.map((t) => ({ t, doc: templateDoc(t) }));
+  const previews = TEMPLATES.map((tpl) => ({ tpl, doc: templateDoc(tpl) }));
 
   /** Um clique no modelo cria a página e abre no Editor. */
   async function create(template: Template) {
@@ -38,7 +39,7 @@
     try {
       const tdoc = templateDoc(template);
       const doc = JSON.stringify(tdoc ?? emptyDoc());
-      const p = await api.createPage(tdoc ? template.name : 'Sem título', projectId, doc);
+      const p = await api.createPage(tdoc ? t(template.name) : t('Sem título'), projectId, doc);
       await reload();
       goto(`/editor?id=${p.id}${template.start === 'mobile' ? '&v=mobile' : ''}`);
     } catch (err) {
@@ -54,7 +55,7 @@
       confirmDelete = null;
       await reload();
     } catch (e) {
-      store.error = `A página não foi excluída. ${message(e)}`;
+      store.error = `${t('A página não foi excluída.')} ${message(e)}`;
     }
   }
 </script>
@@ -66,24 +67,24 @@
     {/key}
   {:else if store.loaded}
     <div class="list-page">
-      <p>Esta página não existe mais.</p>
-      <a href="/editor">Abrir o projeto mais recente</a>
+      <p>{t('Esta página não existe mais.')}</p>
+      <a href="/editor">{t('Abrir o projeto mais recente')}</a>
     </div>
   {/if}
 {:else if !creating}
   {#if store.loaded && !latest}
     <div class="start">
-      <a class="btn primary big" href="/editor?novo=1"><Plus size={18} aria-hidden="true" />Começar projeto</a>
+      <a class="btn primary big" href="/editor?novo=1"><Plus size={18} aria-hidden="true" />{t('Começar projeto')}</a>
     </div>
   {/if}
 {:else}
   <div class="list-page">
-    <h1>Escolha um modelo{#if projectId && projectName(projectId)}&nbsp;para “{projectName(projectId)}”{/if}</h1>
+    <h1>{#if projectId && projectName(projectId)}{t('Escolha um modelo para “{name}”', { name: projectName(projectId) ?? '' })}{:else}{t('Escolha um modelo')}{/if}</h1>
 
     <div class="create" use:shakeOn={formError}>
       <fieldset class="models" disabled={busy}>
-        {#each previews as { t, doc } (t.id)}
-          <button type="button" class="model" onclick={() => create(t)}>
+        {#each previews as { tpl, doc } (tpl.id)}
+          <button type="button" class="model" onclick={() => create(tpl)}>
             <span class="shots">
               {#if doc && doc.mobile}
                 <Thumb {doc} width={184} maxHeight={124} />
@@ -92,7 +93,7 @@
                 <span class="blank">1440 × 1600</span>
               {/if}
             </span>
-            <span class="model-name">{t.name}</span>
+            <span class="model-name">{t(tpl.name)}</span>
           </button>
         {/each}
       </fieldset>
@@ -100,7 +101,7 @@
     {#if formError}<p class="error-text">{formError}</p>{/if}
 
     {#if store.loaded && store.pages.length === 0}
-      <p class="empty">Nenhuma página ainda.</p>
+      <p class="empty">{t('Nenhuma página ainda.')}</p>
     {:else}
       <ul class="pages">
         {#each store.pages as p (p.id)}
@@ -113,12 +114,12 @@
               </span>
             </a>
             {#if confirmDelete === p.id}
-              <span class="small">Excluir “{p.title}”? Não dá para desfazer.</span>
-              <button class="btn danger" onclick={() => remove(p.id)}>Excluir</button>
-              <button class="btn" onclick={() => (confirmDelete = null)}>Cancelar</button>
+              <span class="small">{t('Excluir “{title}”? Não dá para desfazer.', { title: p.title })}</span>
+              <button class="btn danger" onclick={() => remove(p.id)}>{t('Excluir')}</button>
+              <button class="btn" onclick={() => (confirmDelete = null)}>{t('Cancelar')}</button>
             {:else}
-              <a class="btn" href={`/visualizar?id=${p.id}`}><Eye size={14} aria-hidden="true" />Visualizar</a>
-              <button class="btn" aria-label={`Excluir ${p.title}`} onclick={() => (confirmDelete = p.id)}><Trash2 size={14} aria-hidden="true" /></button>
+              <a class="btn" href={`/visualizar?id=${p.id}`}><Eye size={14} aria-hidden="true" />{t('Visualizar')}</a>
+              <button class="btn" aria-label={t('Excluir {title}', { title: p.title })} onclick={() => (confirmDelete = p.id)}><Trash2 size={14} aria-hidden="true" /></button>
             {/if}
           </li>
         {/each}

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ArrowUp, Crosshair } from '@lucide/svelte';
   import { dropdown } from '$lib/motion';
+  import { t } from '$lib/i18n.svelte';
 
   type Props = {
     /** Posição na tela (clientX/clientY do clique). */
@@ -20,8 +21,8 @@
   let top = $derived(Math.max(8, Math.min(y + 8, window.innerHeight - H - 8)));
 
   function send() {
-    const t = text.trim();
-    if (t) onsend(t);
+    const ask = text.trim();
+    if (ask) onsend(ask);
   }
 
   function onkeydown(e: KeyboardEvent) {
@@ -51,11 +52,11 @@
 
 <!-- Clicar fora fecha o balão. -->
 <div class="backdrop" role="presentation" onpointerdown={onclose} oncontextmenu={(e) => { e.preventDefault(); onclose(); }}></div>
-<div class="bubble" in:dropdown role="dialog" aria-label={`Pedir à IA: ${label}`} style={`left:${left}px;top:${top}px;width:${W}px`}>
+<div class="bubble" in:dropdown role="dialog" aria-label={t('Pedir à IA: {label}', { label })} style={`left:${left}px;top:${top}px;width:${W}px`}>
   <p class="target mono"><Crosshair size={12} aria-hidden="true" />{label}</p>
-  <label class="visually-hidden" for="balao-pedido">O que mudar aqui</label>
-  <textarea id="balao-pedido" rows="3" placeholder="O que mudar aqui?" bind:value={text} {onkeydown} use:autofocus></textarea>
-  <button class="go" aria-label="Enviar" data-tip="Enviar (Enter)" onclick={send} disabled={!text.trim()}>
+  <label class="visually-hidden" for="balao-pedido">{t('O que mudar aqui')}</label>
+  <textarea id="balao-pedido" rows="3" placeholder={t('O que mudar aqui?')} bind:value={text} {onkeydown} use:autofocus></textarea>
+  <button class="go" aria-label={t('Enviar')} data-tip={t('Enviar (Enter)')} onclick={send} disabled={!text.trim()}>
     <ArrowUp size={16} aria-hidden="true" />
   </button>
 </div>
@@ -86,9 +87,9 @@
     backdrop-filter: url(#linkon-liquid-glass) blur(5px) saturate(185%) brightness(0.85);
     border: 0;
     box-shadow:
-      inset 1px 1px 0 rgb(255 255 255 / 0.55),
-      inset -1px -1px 0 rgb(255 255 255 / 0.16),
-      inset 0 0 22px rgb(255 255 255 / 0.1),
+      inset 1px 1px 0 color-mix(in srgb, var(--fg) 55%, transparent),
+      inset -1px -1px 0 color-mix(in srgb, var(--fg) 16%, transparent),
+      inset 0 0 22px color-mix(in srgb, var(--fg) 10%, transparent),
       0 2px 6px rgb(0 0 0 / 0.18),
       0 18px 44px rgb(0 0 0 / 0.38);
     overflow: hidden;
@@ -102,7 +103,7 @@
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    background: linear-gradient(180deg, rgb(255 255 255 / 0.16) 0%, rgb(255 255 255 / 0.04) 38%, transparent 60%);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--fg) 16%, transparent) 0%, color-mix(in srgb, var(--fg) 4%, transparent) 38%, transparent 60%);
     pointer-events: none;
   }
 
@@ -124,7 +125,7 @@
     align-items: center;
     gap: 6px;
     margin: 0 0 var(--s2);
-    color: rgb(255 255 255 / 0.72);
+    color: color-mix(in srgb, var(--fg) 72%, transparent);
     font-size: 11px;
     overflow: hidden;
     white-space: nowrap;
@@ -143,7 +144,7 @@
   }
 
   textarea::placeholder {
-    color: rgb(255 255 255 / 0.7);
+    color: color-mix(in srgb, var(--fg) 70%, transparent);
   }
 
   .go {
@@ -170,7 +171,7 @@
   }
 
   .go:disabled {
-    background: #2a2a2a;
+    background: color-mix(in srgb, var(--fg) 16.5%, var(--bg));
     color: var(--muted);
     opacity: 1;
     cursor: default;

@@ -3,6 +3,7 @@
   import { Search as SearchIcon, FolderClosed, File, PenTool } from '@lucide/svelte';
   import { store } from '$lib/store.svelte';
   import { dropdown } from '$lib/motion';
+  import { t } from '$lib/i18n.svelte';
 
   // Arquivo abre a pasta em que está guardado.
   type Result = { kind: 'project' | 'file' | 'page'; id: number; label: string; href: string };
@@ -65,11 +66,11 @@
 
 <div class="search">
   <SearchIcon size={16} strokeWidth={1.75} aria-hidden="true" />
-  <label class="visually-hidden" for="busca">Buscar pastas, arquivos e páginas</label>
+  <label class="visually-hidden" for="busca">{t('Buscar pastas, arquivos e páginas')}</label>
   <input
     id="busca"
     type="search"
-    placeholder="Buscar pastas, arquivos e páginas"
+    placeholder={t('Buscar pastas, arquivos e páginas')}
     autocomplete="off"
     spellcheck="false"
     role="combobox"
@@ -97,7 +98,7 @@
     >
       {#each results as r, i (r.kind + r.id)}
         {#if i === 0 || results[i - 1].kind !== r.kind}
-          <p class="group" role="presentation">{GROUP[r.kind]}</p>
+          <p class="group" role="presentation">{t(GROUP[r.kind])}</p>
         {/if}
         <div
           id={`busca-${i}`}
@@ -120,7 +121,7 @@
           <span>{r.label}</span>
         </div>
       {:else}
-        <p class="none">Nada encontrado para “{query}”.</p>
+        <p class="none">{t('Nada encontrado para “{query}”.', { query })}</p>
       {/each}
     </div>
   {/if}

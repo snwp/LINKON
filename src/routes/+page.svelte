@@ -6,6 +6,7 @@
   import { sortable } from '$lib/reorder';
   import { goto } from '$app/navigation';
   import { store } from '$lib/store.svelte';
+  import { t } from '$lib/i18n.svelte';
   import { parseDoc } from '$lib/editor/doc';
   import Thumb from '$lib/editor/Thumb.svelte';
   import { flip } from 'svelte/animate';
@@ -41,18 +42,18 @@
   role="presentation"
   oncontextmenu={(e) =>
     openMenu(e, [
-      { label: 'Nova interface', icon: Plus, kbd: 'Ctrl N', run: () => goto('/editor?novo=1') },
-      { label: 'Nova pasta', icon: FolderPlus, run: () => goto('/projetos?novo=1') },
+      { label: t('Nova interface'), icon: Plus, kbd: 'Ctrl N', run: () => goto('/editor?novo=1') },
+      { label: t('Nova pasta'), icon: FolderPlus, run: () => goto('/projetos?novo=1') },
       { separator: true },
-      ...viewItems('homeSize', 'homeOrder', 'miniaturas'),
+      ...viewItems('homeSize', 'homeOrder', t('miniaturas')),
     ])}
 >
   <header>
-    <h1>Início</h1>
+    <h1>{t('Início')}</h1>
   </header>
 
   {#if store.projects.length}
-    <ul class="folders" aria-label="Pastas">
+    <ul class="folders" aria-label={t('Pastas')}>
       {#each ordered(store.projects, view.folderOrder, (f) => f.name, view.folderManual).slice(0, 8) as f (f.id)}
         <li>
           <a href={`/projetos?id=${f.id}`}>
@@ -65,11 +66,11 @@
     </ul>
   {/if}
 
-  <ul class="grid" aria-label="Interfaces" style={`--col:${size.col}px;--shot:${size.h}px`}>
+  <ul class="grid" aria-label={t('Interfaces')} style={`--col:${size.col}px;--shot:${size.h}px`}>
     <li>
       <button class="new" onclick={() => goto('/editor?novo=1')}>
         <Plus size={22} strokeWidth={1.5} aria-hidden="true" />
-        Nova interface
+        {t('Nova interface')}
       </button>
     </li>
     {#each pages as p (p.id)}
@@ -120,7 +121,7 @@
 
   .folders a:hover {
     color: var(--fg);
-    background: #141414;
+    background: color-mix(in srgb, var(--fg) 7.8%, var(--bg));
   }
 
   .fname {
@@ -130,7 +131,7 @@
   .count {
     padding: 1px 6px;
     border-radius: 6px;
-    background: #1c1c1c;
+    background: color-mix(in srgb, var(--fg) 11%, var(--bg));
     font-size: 11px;
   }
 
@@ -151,7 +152,7 @@
     gap: var(--s2);
     width: 100%;
     height: var(--shot, 196px);
-    border: 1.5px dashed #3d3d3d;
+    border: 1.5px dashed color-mix(in srgb, var(--fg) 23.9%, var(--bg));
     border-radius: 12px;
     background: transparent;
     color: var(--muted);
@@ -185,12 +186,12 @@
     overflow: hidden;
     border: 1px solid var(--line);
     border-radius: 12px;
-    background: #111;
+    background: color-mix(in srgb, var(--fg) 6.7%, var(--bg));
     transition: border-color 150ms;
   }
 
   .card:hover .shot {
-    border-color: #5a5a5a;
+    border-color: color-mix(in srgb, var(--fg) 35.3%, var(--bg));
   }
 
   .phone {

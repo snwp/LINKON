@@ -5,21 +5,22 @@
    */
   import { ChevronDown, Lock } from '@lucide/svelte';
   import { AI_MODELS, getAiModel, setAiModel } from '$lib/editor/assistant';
+  import { t } from '$lib/i18n.svelte';
   import { openMenuAbove, type MenuItem } from '$lib/menu.svelte';
 
   let { id: domId }: { id?: string } = $props();
   let current = $state(getAiModel());
-  let name = $derived(AI_MODELS.find((m) => m.id === current)?.name ?? 'Modelo');
+  let name = $derived(AI_MODELS.find((m) => m.id === current)?.name ?? t('Modelo'));
   let button: HTMLButtonElement | undefined = $state();
 
   function open() {
     if (!button) return;
     const items: MenuItem[] = AI_MODELS.map((m) =>
       m.locked
-        ? { label: m.name, icon: Lock, disabled: true, note: m.locked, run: () => {} }
+        ? { label: m.name, icon: Lock, disabled: true, note: t(m.locked), run: () => {} }
         : {
             label: m.name,
-            badge: m.isDefault ? 'Padrão' : undefined,
+            badge: m.isDefault ? t('Padrão') : undefined,
             checked: m.id === current,
             run: () => {
               current = m.id;
@@ -31,7 +32,7 @@
   }
 </script>
 
-<button id={domId} class="picker" bind:this={button} onclick={open} aria-haspopup="menu" aria-label={`Modelo: ${name}`}>
+<button id={domId} class="picker" bind:this={button} onclick={open} aria-haspopup="menu" aria-label={t('Modelo: {name}', { name })}>
   {name}
   <ChevronDown size={13} aria-hidden="true" />
 </button>
@@ -55,7 +56,7 @@
   }
 
   .picker:hover {
-    background: #262626;
+    background: color-mix(in srgb, var(--fg) 14.9%, var(--bg));
     color: var(--fg);
   }
 </style>

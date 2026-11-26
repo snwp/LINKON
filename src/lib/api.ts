@@ -2,6 +2,7 @@ import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { openPath } from '@tauri-apps/plugin-opener';
+import { t as tr } from './i18n.svelte';
 
 /** Extensões que o Windows executa ao abrir. */
 export const BLOCKED_TO_OPEN =
@@ -178,7 +179,7 @@ const tauriApi: Api = {
 
   listFiles: () => invoke('list_files'),
   async pickFiles() {
-    const sel = await openDialog({ multiple: true, directory: false, title: 'Adicionar arquivos' });
+    const sel = await openDialog({ multiple: true, directory: false, title: tr('Adicionar arquivos') });
     if (!sel) return null;
     return Array.isArray(sel) ? sel : [sel];
   },
@@ -193,7 +194,7 @@ const tauriApi: Api = {
   // A extensão conferida é a do arquivo no disco, não o nome mostrado.
   openFile: (f) =>
     !f.path || BLOCKED_TO_OPEN.test(f.path)
-      ? Promise.reject('Por segurança, o Linkon não abre programas, scripts nem atalhos.')
+      ? Promise.reject(tr('Por segurança, o Linkon não abre programas, scripts nem atalhos.'))
       : openPath(f.path),
 
   linkIdeas: (a, b, linked) => invoke('link_ideas', { a, b, linked }),
@@ -205,7 +206,7 @@ const tauriApi: Api = {
   deletePage: (id) => invoke('delete_page', { id }),
 
   pickSavePath: (defaultPath) =>
-    saveDialog({ defaultPath, filters: [{ name: 'Página HTML', extensions: ['html'] }], title: 'Exportar página' }),
+    saveDialog({ defaultPath, filters: [{ name: tr('Página HTML'), extensions: ['html'] }], title: tr('Exportar página') }),
   exportHtml: (path, html) => invoke('export_page_html', { path, html }),
   async pickFolder(title) {
     const sel = await openDialog({ directory: true, multiple: false, title });
@@ -269,14 +270,14 @@ function memoryApi(): Api {
   let pages: Page[] = [];
   const blobs = new Map<number, File>();
   const pageTitle = (t: string) => {
-    if (!t.trim()) throw 'A página precisa de um título.';
+    if (!t.trim()) throw tr('A página precisa de um título.');
     return t.trim();
   };
   const checkDoc = (doc: string) => {
     try {
       if (!Array.isArray(JSON.parse(doc).elements)) throw 0;
     } catch {
-      throw 'O conteúdo da página está corrompido.';
+      throw tr('O conteúdo da página está corrompido.');
     }
   };
   const toDataUrl = (blob: Blob) =>
@@ -289,21 +290,21 @@ function memoryApi(): Api {
   let next = 1;
   const now = () => Date.now();
   const title = (t: string) => {
-    if (!t.trim()) throw 'O título não pode ficar vazio.';
+    if (!t.trim()) throw tr('O título não pode ficar vazio.');
     return t.trim();
   };
   const name = (n: string) => {
-    if (!n.trim()) throw 'O nome do projeto não pode ficar vazio.';
+    if (!n.trim()) throw tr('O nome do projeto não pode ficar vazio.');
     return n.trim();
   };
   const checkProject = (id: number | null) => {
-    if (id !== null && !projects.some((p) => p.id === id)) throw 'O projeto escolhido não existe mais.';
+    if (id !== null && !projects.some((p) => p.id === id)) throw tr('O projeto escolhido não existe mais.');
     const p = projects.find((p) => p.id === id);
     if (p) p.updated_at = now();
   };
   const find = (id: number) => {
     const i = ideas.find((i) => i.id === id);
-    if (!i) throw 'Ideia não encontrada.';
+    if (!i) throw tr('Ideia não encontrada.');
     return i;
   };
   const copyFile = (f: FileItem): FileItem => ({ ...f, project_ids: [...f.project_ids], idea_ids: [...f.idea_ids] });
@@ -347,7 +348,7 @@ function memoryApi(): Api {
     },
     async renameProject(id, n) {
       const p = projects.find((p) => p.id === id);
-      if (!p) throw 'Projeto não encontrado.';
+      if (!p) throw tr('Projeto não encontrado.');
       Object.assign(p, { name: name(n), updated_at: now() });
     },
     async deleteProject(id) {
@@ -357,10 +358,10 @@ function memoryApi(): Api {
       for (const p of pages) if (p.project_id === id) p.project_id = null;
     },
     async dataDir() {
-      return 'Prévia no navegador: nada é gravado em disco.';
+      return tr('Prévia no navegador: nada é gravado em disco.');
     },
     async openDataDir() {
-      throw 'A pasta dos dados só existe no app desktop.';
+      throw tr('A pasta dos dados só existe no app desktop.');
     },
 
     async listFiles() {
@@ -380,7 +381,7 @@ function memoryApi(): Api {
       const report: ImportReport = { imported: [], failed: [] };
       for (const file of picked) {
         if (typeof file === 'string') {
-          report.failed.push({ name: file, reason: 'Caminhos só funcionam no app desktop.' });
+          report.failed.push({ name: file, reason: tr('Caminhos só funcionam no app desktop.') });
           continue;
         }
         const ext = /\.([a-z0-9]{1,10})$/i.exec(file.name)?.[1].toLowerCase() ?? '';
@@ -409,14 +410,14 @@ function memoryApi(): Api {
     },
     async setFileLink(fileId, target, targetId, linked) {
       const f = files.find((f) => f.id === fileId);
-      if (!f) throw 'Arquivo não encontrado.';
+      if (!f) throw tr('Arquivo não encontrado.');
       const key = target === 'project' ? 'project_ids' : 'idea_ids';
       f[key] = f[key].filter((x) => x !== targetId);
       if (linked) f[key].push(targetId);
     },
     async textPreview(id) {
       const blob = blobs.get(id);
-      if (!blob) throw 'Arquivo não encontrado.';
+      if (!blob) throw tr('Arquivo não encontrado.');
       return blob.slice(0, 64 * 1024).text();
     },
     fileUrl: (f) => f.path,
@@ -425,9 +426,9 @@ function memoryApi(): Api {
     },
 
     async linkIdeas(a, b, linked) {
-      if (a === b) throw 'Uma ideia não pode se conectar a ela mesma.';
+      if (a === b) throw tr('Uma ideia não pode se conectar a ela mesma.');
       const [x, y] = a < b ? [a, b] : [b, a];
-      if (!ideas.some((i) => i.id === x) || !ideas.some((i) => i.id === y)) throw 'Uma das ideias não existe mais.';
+      if (!ideas.some((i) => i.id === x) || !ideas.some((i) => i.id === y)) throw tr('Uma das ideias não existe mais.');
       links = links.filter(([p, q]) => !(p === x && q === y));
       if (linked) links.push([x, y]);
     },
@@ -448,7 +449,7 @@ function memoryApi(): Api {
     },
     async updatePage(id, t, projectId, doc) {
       const p = pages.find((p) => p.id === id);
-      if (!p) throw 'Página não encontrada.';
+      if (!p) throw tr('Página não encontrada.');
       checkProject(projectId);
       checkDoc(doc);
       Object.assign(p, { title: pageTitle(t), project_id: projectId, doc, updated_at: now() });
@@ -474,20 +475,20 @@ function memoryApi(): Api {
       a.click();
     },
     async pickFolder() {
-      throw 'Cópias de segurança só funcionam no app desktop.';
+      throw tr('Cópias de segurança só funcionam no app desktop.');
     },
     async createBackup() {
-      throw 'Cópias de segurança só funcionam no app desktop.';
+      throw tr('Cópias de segurança só funcionam no app desktop.');
     },
     async restoreBackup() {
-      throw 'Cópias de segurança só funcionam no app desktop.';
+      throw tr('Cópias de segurança só funcionam no app desktop.');
     },
 
     async aiCheck() {
-      throw 'O assistente só funciona no app desktop, usando o Claude Code instalado neste computador.';
+      throw tr('O assistente só funciona no app desktop, usando o Claude Code instalado neste computador.');
     },
     async aiRun() {
-      throw 'O assistente só funciona no app desktop, usando o Claude Code instalado neste computador.';
+      throw tr('O assistente só funciona no app desktop, usando o Claude Code instalado neste computador.');
     },
     async aiCancel() {},
 
@@ -495,19 +496,19 @@ function memoryApi(): Api {
       return '';
     },
     async openInBrowser() {
-      throw 'Ver no navegador só funciona no app desktop.';
+      throw tr('Ver no navegador só funciona no app desktop.');
     },
     async sitesFolder() {
-      return 'Prévia no navegador: os sites não são gravados.';
+      return tr('Prévia no navegador: os sites não são gravados.');
     },
     async openSitesFolder() {
-      throw 'A pasta dos sites só existe no app desktop.';
+      throw tr('A pasta dos sites só existe no app desktop.');
     },
     async preparePublish() {
-      throw 'Publicar só funciona no app desktop.';
+      throw tr('Publicar só funciona no app desktop.');
     },
     async publishSite() {
-      throw 'Publicar só funciona no app desktop.';
+      throw tr('Publicar só funciona no app desktop.');
     },
     async openPublished() {},
     async vercelStatus() {
@@ -515,14 +516,14 @@ function memoryApi(): Api {
     },
 
     async generateImage() {
-      throw 'Gerar imagens só funciona no app desktop.';
+      throw tr('Gerar imagens só funciona no app desktop.');
     },
     async cancelImage() {},
     async imageStatus() {
       return { codex: '', hasKey: false };
     },
     async setImageKey() {
-      throw 'A chave só pode ser guardada no app desktop.';
+      throw tr('A chave só pode ser guardada no app desktop.');
     },
   };
 }

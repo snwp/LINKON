@@ -2,6 +2,7 @@
   import { api, type FileItem } from '$lib/api';
   import { bytes } from '$lib/format';
   import KindIcon from '$lib/KindIcon.svelte';
+  import { t } from '$lib/i18n.svelte';
 
   type Props = { file: FileItem; selected?: boolean; href?: string; onselect?: () => void };
   let { file, selected = false, href, onselect }: Props = $props();
@@ -16,7 +17,7 @@
       <img src={api.fileUrl(file)} alt="" loading="lazy" decoding="async" onerror={() => (broken = true)} />
     {:else}
       <span class="icon"><KindIcon kind={file.kind} size={28} /></span>
-      <span class="ext mono">{file.ext ? file.ext.toUpperCase() : 'ARQUIVO'}</span>
+      <span class="ext mono">{file.ext ? file.ext.toUpperCase() : t('ARQUIVO')}</span>
     {/if}
   </span>
   <span class="name" title={file.name}>{file.name}</span>
