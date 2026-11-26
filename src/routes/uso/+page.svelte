@@ -109,6 +109,7 @@
     flex-direction: column;
     gap: var(--s5);
     max-width: 960px;
+    margin-inline: auto;
     padding: var(--s6) var(--s7) calc(var(--s6) + var(--dock-space, 0px));
   }
 
