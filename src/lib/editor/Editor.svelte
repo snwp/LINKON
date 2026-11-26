@@ -55,7 +55,9 @@
   // svelte-ignore state_referenced_locally
   let projectId = $state<number | null>(page.project_id);
   // svelte-ignore state_referenced_locally
-  let root = $state<Doc>(parseDoc(page.doc));
+  const adopted = background.get(page.id);
+  // svelte-ignore state_referenced_locally
+  let root = $state<Doc>(adopted?.root ?? parseDoc(page.doc));
   /** Versão em edição. A mobile fica em `root.mobile`; tudo no canvas trabalha sobre `doc`. */
   let view = $state<'desktop' | 'mobile'>(
     // svelte-ignore state_referenced_locally
@@ -174,7 +176,7 @@
       // O pedido em andamento continua sem a tela: termina, salva e avisa (ver askAi).
       if (aiRun && aiDone) {
         detached = true;
-        background.set(page.id, { runId: aiRun.runId, done: aiDone });
+        background.set(page.id, { runId: aiRun.runId, markedId: aiRun.markedId, startedAt: aiStartedAt, root, done: aiDone });
       }
       unregister();
       commit();
@@ -480,6 +482,16 @@
   let aiDone: Promise<void> | null = null;
   /** O editor fechou com o pedido rodando. */
   let detached = false;
+  // Reaberto no meio de um pedido: mostra-o rodando e, quando acabar, vira um passo de desfazer aqui também.
+  if (adopted) {
+    aiRun = { runId: adopted.runId, markedId: adopted.markedId };
+    aiStartedAt = adopted.startedAt;
+    aiDone = adopted.done;
+    adopted.done.then(() => {
+      aiRun = null;
+      commit();
+    });
+  }
   let bubble = $state<{ x: number; y: number; markedId: string | null; point: { x: number; y: number } | null; label: string } | null>(null);
   let recentRequests: string[] = [];
   let pageEl: HTMLDivElement | undefined = $state();

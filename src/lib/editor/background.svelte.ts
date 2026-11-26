@@ -1,8 +1,15 @@
 import { SvelteMap } from 'svelte/reactivity';
 import type { LogEntry } from './assistant';
+import type { Doc } from './doc';
 
-/** Pedido ao Claude que segue rodando depois de você sair do editor daquela página. */
-export const background = new SvelteMap<number, { runId: string; done: Promise<void> }>();
+/**
+ * Pedido ao Claude que segue rodando depois de você sair do editor daquela página.
+ * `root` é o documento vivo que ele está alterando: o editor reaberto usa o mesmo, e você vê o trabalho acontecer.
+ */
+export const background = new SvelteMap<
+  number,
+  { runId: string; markedId: string | null; startedAt: number; root: Doc; done: Promise<void> }
+>();
 
 /** Conversa com o Claude por página: volta junto quando você reabre o editor. */
 export const aiLogs = new Map<number, LogEntry[]>();

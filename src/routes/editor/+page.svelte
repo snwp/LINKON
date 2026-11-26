@@ -7,9 +7,7 @@
   import { store, reload, projectName } from '$lib/store.svelte';
   import { ago } from '$lib/format';
   import { emptyDoc, parseDoc } from '$lib/editor/doc';
-  import Editor from '$lib/editor/Editor.svelte';
-  import { background } from '$lib/editor/background.svelte';
-  import Thumb from '$lib/editor/Thumb.svelte';
+  import Editor from '$lib/editor/Editor.svelte';  import Thumb from '$lib/editor/Thumb.svelte';
   import { TEMPLATES, templateDoc, type Template } from '$lib/editor/layouts';
 
   let pageId = $derived(Number(page.url.searchParams.get('id')) || null);
@@ -62,15 +60,7 @@
 </script>
 
 {#if pageId}
-  {#if current && background.has(current.id)}
-    <!-- O Claude segue num editor que já fechou; a página reabre com o resultado assim que ele salvar. -->
-    <div class="start">
-      <div class="waiting" role="status">
-        <p>O Claude ainda está trabalhando em “{current.title}”.</p>
-        <button class="btn" onclick={() => api.aiCancel(background.get(current.id)!.runId)}>Parar</button>
-      </div>
-    </div>
-  {:else if current}
+  {#if current}
     {#key current.id}
       <Editor page={current} />
     {/key}
@@ -144,14 +134,6 @@
     place-items: center;
     height: 100%;
     padding-bottom: var(--dock-space, 0px);
-  }
-
-  .waiting {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--s3);
-    color: var(--muted);
   }
 
   .big {
