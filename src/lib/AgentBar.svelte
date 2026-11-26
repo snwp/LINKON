@@ -7,7 +7,7 @@
   import { store, reload, addFiles, projectName } from '$lib/store.svelte';
   import { setPending } from '$lib/agent.svelte';
   import ModelPicker from '$lib/ModelPicker.svelte';
-  import Bolinha from '$lib/Bolinha.svelte';
+  import Linke from '$lib/Linke.svelte';
   import { emptyDoc } from '$lib/editor/doc';
 
   let text = $state('');
@@ -65,10 +65,10 @@
   }
 </script>
 
-<div class="bar" role="group" aria-label="Bolinha">
-  <label class="visually-hidden" for="agente-pedido">Pedido para a Bolinha</label>
+<div class="bar" role="group" aria-label="Linke">
+  <label class="visually-hidden" for="agente-pedido">Pedido para Linke</label>
   <div class="ask">
-  <span class="mascot"><Bolinha size={18} /></span>
+  <span class="mascot"><Linke size={18} /></span>
   <textarea
     id="agente-pedido"
     bind:this={input}
@@ -119,7 +119,7 @@
     align-items: flex-start;
   }
 
-  /* A Bolinha fica na altura da primeira linha do texto (5 px de respiro + 20 px de linha). */
+  /* Linke fica na altura da primeira linha do texto (5 px de respiro + 20 px de linha). */
   .mascot {
     padding: 6px 0 0 8px;
   }

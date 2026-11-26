@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <!-- Ícone do Linkon: a Bolinha, o mascote (um círculo com dois olhos vazados), mesma geometria de src/lib/Bolinha.svelte em escala 22×. -->
+  <!-- Ícone do Linkon: Linke, o mascote (um círculo com dois olhos vazados), mesma geometria de src/lib/Linke.svelte em escala 22×. -->
   <rect width="1024" height="1024" rx="224" fill="#0a0a0a"/>
   <circle cx="512" cy="512" r="352" fill="#ffffff"/>
   <rect x="358" y="402" width="88" height="154" rx="44" fill="#0a0a0a"/>

@@ -10,7 +10,7 @@
   import { logIn } from '$lib/motion';
   import type { LogEntry } from './assistant';
   import ModelPicker from '$lib/ModelPicker.svelte';
-  import Bolinha from '$lib/Bolinha.svelte';
+  import Linke from '$lib/Linke.svelte';
 
   type Props = {
     log: LogEntry[];
@@ -86,10 +86,10 @@
   }
 </script>
 
-<aside class="claude" aria-label="Bolinha" onpointerdown={(e) => e.stopPropagation()}>
+<aside class="claude" aria-label="Linke" onpointerdown={(e) => e.stopPropagation()}>
   <header>
-    <h2><Bolinha size={18} />Bolinha</h2>
-    <button class="min" onclick={onminimize} aria-label="Minimizar a Bolinha" data-tip="Minimizar"><PanelRightClose size={15} aria-hidden="true" /></button>
+    <h2><Linke size={18} />Linke</h2>
+    <button class="min" onclick={onminimize} aria-label="Minimizar Linke" data-tip="Minimizar"><PanelRightClose size={15} aria-hidden="true" /></button>
   </header>
 
   <ol class="log" bind:this={list} aria-live="polite">
@@ -128,7 +128,7 @@
 
   <div class="compose">
     <div class="box">
-      <label class="visually-hidden" for="claude-pedido">Pedido para a Bolinha</label>
+      <label class="visually-hidden" for="claude-pedido">Pedido para Linke</label>
       <textarea
         id="claude-pedido"
         bind:this={input}

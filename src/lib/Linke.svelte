@@ -1,12 +1,12 @@
 <script lang="ts">
   /**
-   * Bolinha, o mascote do Editor. Base geométrica: um círculo com dois olhos vazados.
-   * Os olhos são furos (regra evenodd), então a Bolinha mostra o fundo em qualquer tema e herda a cor do texto.
+   * Linke, o mascote do Editor. Base geométrica: um círculo com dois olhos vazados.
+   * Os olhos são furos (regra evenodd), então Linke mostra o fundo em qualquer tema e herda a cor do texto.
    */
   let { size = 16 }: { size?: number } = $props();
 </script>
 
-<svg width={size} height={size} viewBox="0 0 48 48" aria-hidden="true" class="bolinha">
+<svg width={size} height={size} viewBox="0 0 48 48" aria-hidden="true" class="linke">
   <path
     fill="currentColor"
     fill-rule="evenodd"
@@ -15,7 +15,7 @@
 </svg>
 
 <style>
-  .bolinha {
+  .linke {
     display: block;
     flex: none;
   }

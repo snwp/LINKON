@@ -271,7 +271,7 @@
 
     <label class="toggle">
       <input type="checkbox" bind:checked={aiNotify} onchange={() => setAiNotify(aiNotify)} />
-      <span>Avisar quando a Bolinha terminar e eu estiver fora do editor</span>
+      <span>Avisar quando Linke terminar e eu estiver fora do editor</span>
     </label>
   </section>
 
