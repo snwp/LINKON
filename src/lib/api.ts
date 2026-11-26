@@ -72,6 +72,7 @@ type Api = {
   renameProject(id: number, name: string): Promise<void>;
   deleteProject(id: number): Promise<void>;
   dataDir(): Promise<string>;
+  openDataDir(): Promise<void>;
 
   listFiles(): Promise<FileItem[]>;
   /** Abre o seletor do sistema. null quando o usuário cancela. */
@@ -173,6 +174,7 @@ const tauriApi: Api = {
   renameProject: (id, name) => invoke('rename_project', { id, name }),
   deleteProject: (id) => invoke('delete_project', { id }),
   dataDir: () => invoke('data_dir'),
+  openDataDir: () => invoke('open_data_dir'),
 
   listFiles: () => invoke('list_files'),
   async pickFiles() {
@@ -356,6 +358,9 @@ function memoryApi(): Api {
     },
     async dataDir() {
       return 'Prévia no navegador: nada é gravado em disco.';
+    },
+    async openDataDir() {
+      throw 'A pasta dos dados só existe no app desktop.';
     },
 
     async listFiles() {

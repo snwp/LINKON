@@ -25,6 +25,14 @@
     checkVercel();
   });
 
+  async function openData() {
+    try {
+      await api.openDataDir();
+    } catch (e) {
+      store.error = message(e);
+    }
+  }
+
   async function openSites() {
     try {
       await api.openSitesFolder();
@@ -174,6 +182,7 @@
     <div class="path">
       <code class="mono">{dir || '…'}</code>
       <button class="btn" onclick={copy} disabled={!dir}>{copied ? 'Copiado' : 'Copiar caminho'}</button>
+      <button class="btn" onclick={openData} disabled={!dir}>Abrir pasta</button>
     </div>
   </section>
 
@@ -345,6 +354,7 @@
     gap: var(--s6);
     padding: var(--s6) var(--s7) calc(var(--s6) + var(--dock-space, 0px));
     max-width: 760px;
+    margin-inline: auto;
   }
 
   section {

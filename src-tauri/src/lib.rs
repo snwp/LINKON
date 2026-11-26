@@ -102,6 +102,12 @@ fn data_dir(state: State<AppDb>) -> String {
     state.dir.display().to_string()
 }
 
+#[tauri::command]
+fn open_data_dir(app: AppHandle, state: State<AppDb>) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    app.opener().open_path(state.dir.display().to_string(), None::<&str>).map_err(|e| format!("Não foi possível abrir a pasta ({e})."))
+}
+
 // ---------- biblioteca ----------
 
 #[derive(Serialize, Default)]
@@ -448,6 +454,7 @@ pub fn run() {
             rename_project,
             delete_project,
             data_dir,
+            open_data_dir,
             import_files,
             sync_site,
             open_in_browser,
