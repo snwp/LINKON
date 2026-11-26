@@ -4,17 +4,20 @@
  * operação sobre a página, aplicada assim que a linha termina, para a página ir se montando na tela.
  */
 import { t } from '$lib/i18n.svelte';
-import { createElement, emptyImagesUnder, newId, TYPE_LABELS, type Doc, type El, type ElementType } from './doc';
+import { createElement, emptyImagesUnder, frameDoc, frameFiles, newFrame, newId, placeFrame, MAIN_FRAME, TYPE_LABELS, type Doc, type El, type ElementType } from './doc';
 
 /** Uma linha do registro do painel do assistente. */
 export type LogEntry = { kind: 'user' | 'ai' | 'action' | 'error'; text: string; scope?: string };
 
+type PageProps = Partial<Pick<Doc, 'width' | 'height' | 'background'>>;
+/** `frame` = id do quadro onde a operação vale; sem ele, o quadro aberto na tela. */
 export type Op =
   | { op: 'say'; text: string }
-  | { op: 'add'; type: ElementType; id?: string; props: Partial<El> }
-  | { op: 'update'; id: string; props: Partial<El> }
-  | { op: 'delete'; id: string }
-  | { op: 'page'; props: Partial<Pick<Doc, 'width' | 'height' | 'background'>> };
+  | { op: 'add'; type: ElementType; id?: string; props: Partial<El>; frame?: string }
+  | { op: 'update'; id: string; props: Partial<El>; frame?: string }
+  | { op: 'delete'; id: string; frame?: string }
+  | { op: 'page'; props: PageProps; frame?: string }
+  | { op: 'frame'; id: string; name?: string; props: PageProps };
 
 export const SYSTEM_PROMPT = `Você é o assistente de layout do Linkon, um editor visual de páginas. Você monta e ajusta a página pedida emitindo operações, uma por linha, em JSON Lines. Não use blocos de código, não use markdown, não escreva nada além das linhas JSON.
 
@@ -30,6 +33,14 @@ Operações (uma por linha):
 {"op":"update","id":"...","props":{...}}  muda só as propriedades informadas
 {"op":"delete","id":"..."}
 {"op":"page","props":{"width":1280,"height":1600,"background":"#ffffff"}}
+{"op":"frame","id":"sobre","name":"Sobre","props":{"width":1440,"height":1600,"background":"#ffffff"}}  cria um quadro (ou, com o id de um quadro existente, muda nome, tamanho ou fundo)
+
+Quadros: o site pode ter vários quadros, e cada quadro é uma tela (página) do site. O contexto lista todos, com id, nome, arquivo e elementos, e diz qual está aberto na tela.
+- Sem "frame", add, update, delete e page valem para o quadro aberto. Para mexer em outro quadro, acrescente "frame":"<id do quadro>" na operação. A página inicial tem o id "principal".
+- Antes de emitir operações, decida quais quadros o pedido envolve: só o aberto, outro, ou vários. Mudanças de identidade do site (menu, rodapé, cores, fontes, logotipo) devem valer em todos os quadros, para as telas ficarem consistentes. Não mexa em quadro que o pedido não envolve.
+- Crie um quadro quando o pedido pedir uma tela que ainda não existe ou quando um link precisar levar a uma tela que não existe. O id é curto, minúsculo, sem espaço nem acento (ex.: "sobre", "contato"); depois crie os elementos dele com "frame":"<id>". Uma tela nova segue o estilo das que já existem (mesmo menu, rodapé, fontes e cores).
+- Link para outra tela: "href":"quadro:<id>" (para a página inicial, "quadro:principal"). Ao criar uma tela nova, ligue a ela os links que fizerem sentido (por exemplo, o item correspondente do menu).
+- Ids de elementos valem dentro do seu quadro.
 
 Regras:
 - Comece com uma linha "say" dizendo em poucas palavras o que vai fazer; termine com uma linha "say" curta dizendo o que fez.
@@ -42,14 +53,16 @@ Regras:
 /** O que vai junto com cada pedido: a página atual e o que existe para usar. */
 export function buildPrompt(input: {
   request: string;
-  doc: Doc;
+  /** Documento principal (com os quadros) e o id do quadro aberto na tela. */
+  root: Doc;
+  active: string;
   title: string;
   marked?: El | null;
   point?: { x: number; y: number } | null;
   images: { id: number; name: string }[];
   recent: string[];
 }): string {
-  const elements = input.doc.elements.map((e) => ({
+  const elementsOf = (d: Doc) => d.elements.map((e) => ({
     id: e.id,
     type: e.type,
     name: e.name,
@@ -73,15 +86,23 @@ export function buildPrompt(input: {
     ...(e.ref ? { ref: e.ref } : {}),
     ...(e.hidden ? { hidden: true } : {}),
   }));
+  const files = frameFiles(input.root);
+  const frames = [{ id: MAIN_FRAME, name: 'Página inicial', file: 'index.html', d: input.root }, ...(input.root.frames ?? []).map((f) => ({ id: f.id, name: f.name, file: files.get(f.id) ?? '', d: f as Doc }))];
+  const describe = frames
+    .map(
+      (f) =>
+        `Quadro "${f.name}" (id "${f.id}", arquivo ${f.file})${f.id === input.active ? ' — ABERTO NA TELA' : ''}: ${f.d.width} x ${f.d.height}, fundo ${f.d.background}.\nElementos (JSON):\n${JSON.stringify(elementsOf(f.d))}`,
+    )
+    .join('\n\n');
   const parts = [
-    `Página "${input.title}": ${input.doc.width} x ${input.doc.height}, fundo ${input.doc.background}.`,
-    `Elementos atuais (JSON):\n${JSON.stringify(elements)}`,
+    `Site "${input.title}". ${frames.length > 1 ? `${frames.length} quadros.` : 'Um quadro.'}`,
+    describe,
     input.images.length ? `Imagens disponíveis (fileId e nome):\n${JSON.stringify(input.images)}` : 'Nenhuma imagem importada.',
     input.recent.length ? `Pedidos anteriores nesta página, do mais antigo ao mais recente:\n- ${input.recent.join('\n- ')}` : '',
     input.marked
-      ? `Elemento marcado: id "${input.marked.id}" (${TYPE_LABELS[input.marked.type]} "${input.marked.name}", x ${input.marked.x}, y ${input.marked.y}, ${input.marked.w} x ${input.marked.h}). O pedido vale só para ele.`
+      ? `Elemento marcado (no quadro aberto): id "${input.marked.id}" (${TYPE_LABELS[input.marked.type]} "${input.marked.name}", x ${input.marked.x}, y ${input.marked.y}, ${input.marked.w} x ${input.marked.h}). O pedido vale só para ele.`
       : '',
-    input.point ? `Ponto marcado na página: x ${Math.round(input.point.x)}, y ${Math.round(input.point.y)}.` : '',
+    input.point ? `Ponto marcado no quadro aberto: x ${Math.round(input.point.x)}, y ${Math.round(input.point.y)}.` : '',
     `Pedido: ${input.request}`,
   ];
   return parts.filter(Boolean).join('\n\n');
@@ -129,6 +150,18 @@ export function cleanProps(raw: unknown, ctx: { fileIds: Set<number>; ideaIds: S
   return out;
 }
 
+/** Id de quadro: vira parte de um link (quadro:<id>), então só minúsculas, números e hífen. Mesma regra ao criar e ao referir. */
+const frameId = (raw: string) => raw.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40);
+
+function pageProps(raw: unknown): PageProps {
+  const p = (raw ?? {}) as Record<string, unknown>;
+  const props: PageProps = {};
+  if (typeof p.width === 'number' && Number.isFinite(p.width)) props.width = Math.min(4000, Math.max(200, Math.round(p.width)));
+  if (typeof p.height === 'number' && Number.isFinite(p.height)) props.height = Math.min(20000, Math.max(200, Math.round(p.height)));
+  if (typeof p.background === 'string' && HEX.test(p.background)) props.background = p.background;
+  return props;
+}
+
 /** Uma linha de texto vira uma operação, ou null se não for uma operação válida. */
 export function parseOp(line: string, ctx: Parameters<typeof cleanProps>[1]): Op | null {
   const t = line.trim().replace(/^```\w*$/, '');
@@ -139,23 +172,24 @@ export function parseOp(line: string, ctx: Parameters<typeof cleanProps>[1]): Op
   } catch {
     return null;
   }
+  const frame = typeof v.frame === 'string' ? frameId(v.frame) || undefined : undefined;
   switch (v.op) {
     case 'say':
       return typeof v.text === 'string' ? { op: 'say', text: v.text.slice(0, 2000) } : null;
     case 'add':
       if (!TYPES.includes(v.type as ElementType)) return null;
-      return { op: 'add', type: v.type as ElementType, id: typeof v.id === 'string' ? v.id.slice(0, 60) : undefined, props: cleanProps(v.props, ctx) };
+      return { op: 'add', type: v.type as ElementType, id: typeof v.id === 'string' ? v.id.slice(0, 60) : undefined, props: cleanProps(v.props, ctx), frame };
     case 'update':
-      return typeof v.id === 'string' ? { op: 'update', id: v.id, props: cleanProps(v.props, ctx) } : null;
+      return typeof v.id === 'string' ? { op: 'update', id: v.id, props: cleanProps(v.props, ctx), frame } : null;
     case 'delete':
-      return typeof v.id === 'string' ? { op: 'delete', id: v.id } : null;
-    case 'page': {
-      const p = (v.props ?? {}) as Record<string, unknown>;
-      const props: Partial<Doc> = {};
-      if (typeof p.width === 'number' && Number.isFinite(p.width)) props.width = Math.min(4000, Math.max(200, Math.round(p.width)));
-      if (typeof p.height === 'number' && Number.isFinite(p.height)) props.height = Math.min(20000, Math.max(200, Math.round(p.height)));
-      if (typeof p.background === 'string' && HEX.test(p.background)) props.background = p.background;
-      return { op: 'page', props };
+      return typeof v.id === 'string' ? { op: 'delete', id: v.id, frame } : null;
+    case 'page':
+      return { op: 'page', props: pageProps(v.props), frame };
+    case 'frame': {
+      const id = typeof v.id === 'string' ? frameId(v.id) : '';
+      if (!id) return null;
+      const name = typeof v.name === 'string' && v.name.trim() ? v.name.trim().slice(0, 60) : undefined;
+      return { op: 'frame', id, name, props: pageProps(v.props) };
     }
     default:
       return null;
@@ -166,10 +200,31 @@ export function parseOp(line: string, ctx: Parameters<typeof cleanProps>[1]): Op
  * Aplica uma operação no documento vivo do editor. Devolve um rótulo curto para o registro do assistente,
  * ou null quando a operação não pôde ser aplicada (id inexistente, fora do escopo marcado).
  */
-export function applyOp(doc: Doc, op: Op, scope: { markedId: string | null }): string | null {
+export function applyOp(root: Doc, op: Op, scope: { markedId: string | null; active: string }): string | null {
+  if (op.op === 'say') return null;
+  if (op.op === 'frame') {
+    // Com um elemento marcado, o pedido vale só para ele: nada de quadros novos.
+    if (scope.markedId) return null;
+    const existing = frameDoc(root, op.id);
+    if (existing) {
+      Object.assign(existing, op.props);
+      const named = root.frames?.find((f) => f.id === op.id);
+      if (op.name && named) named.name = op.name;
+      return t('Ajustou o quadro “{name}”', { name: op.name ?? op.id });
+    }
+    const last = root.frames?.at(-1);
+    const f = { ...newFrame(root, 0, root.y ?? 0, op.name ?? op.id), ...op.props, id: op.id };
+    f.x = (last ? last.x + last.width : (root.x ?? 0) + root.width) + 160;
+    placeFrame(root, f);
+    root.frames = [...(root.frames ?? []), f];
+    return t('Criou o quadro “{name}”', { name: f.name });
+  }
+  const frameId = op.frame ?? scope.active;
+  // O elemento marcado está no quadro aberto: com ele, nada muda em outros quadros.
+  if (scope.markedId && frameId !== scope.active) return null;
+  const doc = frameDoc(root, frameId);
+  if (!doc) return null;
   switch (op.op) {
-    case 'say':
-      return null;
     case 'add': {
       const id = op.id && !doc.elements.some((e) => e.id === op.id) ? op.id : newId();
       const el = createElement(op.type, doc, op.props.x ?? 96, op.props.y ?? 96, { ...op.props, id });

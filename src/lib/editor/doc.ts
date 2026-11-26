@@ -90,6 +90,25 @@ export function frameFiles(root: Doc): Map<string, string> {
   return files;
 }
 
+/** O documento de um quadro pelo id (`principal` = a página inicial). Null se não existe. */
+export function frameDoc(root: Doc, id: string): Doc | null {
+  return id === MAIN_FRAME ? root : (root.frames?.find((f) => f.id === id) ?? null);
+}
+
+/** Empurra o quadro para a direita até não encostar em nenhum outro (folga de `gap`). */
+export function placeFrame(root: Doc, f: Frame, gap = 160) {
+  const all = [{ x: root.x ?? 0, y: root.y ?? 0, width: root.width, height: root.height }, ...(root.frames ?? []).filter((o) => o !== f)];
+  for (let hit = true; hit; ) {
+    hit = false;
+    for (const o of all) {
+      if (f.x < o.x + o.width + gap && f.x + f.width + gap > o.x && f.y < o.y + o.height + gap && f.y + f.height + gap > o.y) {
+        f.x = o.x + o.width + gap;
+        hit = true;
+      }
+    }
+  }
+}
+
 export function newFrame(root: Doc, x: number, y: number, name: string): Frame {
   return { version: 1, id: newId(), name, x: Math.round(x), y: Math.round(y), width: root.width, height: 900, background: '#ffffff', elements: [] };
 }

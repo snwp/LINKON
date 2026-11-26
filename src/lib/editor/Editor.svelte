@@ -21,6 +21,8 @@
     snapMove,
     HANDLES,
     newFrame,
+    placeFrame,
+    frameDoc,
     MAIN_FRAME,
     type Doc,
     type Frame,
@@ -590,16 +592,7 @@
     const n = (root.frames?.length ?? 0) + 2;
     const f = newFrame(root, x, y, t('Quadro {n}', { n }));
     // Nunca nasce por cima de outro quadro: anda para a direita até achar espaço livre.
-    const GAP = 160;
-    for (let hit = true; hit; ) {
-      hit = false;
-      for (const o of slots) {
-        if (f.x < o.x + o.d.width + GAP && f.x + f.width + GAP > o.x && f.y < o.y + o.d.height + GAP && f.y + f.height + GAP > o.y) {
-          f.x = o.x + o.d.width + GAP;
-          hit = true;
-        }
-      }
-    }
+    placeFrame(root, f);
     root.frames = [...(root.frames ?? []), f];
     selectedId = null;
     frameId = f.id;
@@ -747,9 +740,14 @@
       ideaIds: new Set(ideas.map((i) => i.id)),
       refFileIds: new Set(others.map((f) => f.id)),
     };
+    // Fixa a versão (desktop ou mobile) do pedido: o resultado não muda de versão no meio.
+    // No desktop, o Linke vê e pode mudar todos os quadros; o aberto é o padrão.
+    const target = view === 'mobile' && root.mobile ? root.mobile : root;
+    const active = view === 'mobile' ? MAIN : activeId;
     const prompt = buildPrompt({
       request,
-      doc: $state.snapshot(doc) as Doc,
+      root: $state.snapshot(target) as Doc,
+      active,
       title,
       marked: marked ? ($state.snapshot(marked) as El) : null,
       point,
@@ -761,8 +759,6 @@
     aiRun = { runId, markedId };
     let finished!: () => void;
     aiDone = new Promise((r) => (finished = r));
-    // Fixa a versão (desktop ou mobile) do pedido: o resultado não muda de versão no meio.
-    const target = doc;
     aiStartedAt = Date.now();
     const model = getAiModel();
     let usage: AiUsage | null = null;
@@ -780,11 +776,12 @@
         aiLog.push({ kind: 'ai', text: op.text });
         return;
       }
-      const count = target.elements.length;
-      const label = applyOp(target, op, { markedId });
+      const into = op.op === 'frame' ? null : frameDoc(target, op.frame ?? active);
+      const count = into?.elements.length ?? 0;
+      const label = applyOp(target, op, { markedId, active });
       if (label) {
         // Criado pela IA: entra com animação, para dar para ver a página se montando (preencher um espaço não cria nada).
-        if (op.op === 'add' && target.elements.length > count) aiEntering.add(target.elements[target.elements.length - 1].id);
+        if (op.op === 'add' && into && into.elements.length > count) aiEntering.add(into.elements[into.elements.length - 1].id);
         applied++;
         aiLog.push({ kind: 'action', text: label });
       }

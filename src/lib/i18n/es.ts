@@ -352,4 +352,6 @@ export const es: Record<string, string> = {
   "Para onde o link leva": "Adónde lleva el enlace",
   "Endereço externo": "Dirección externa",
   "Arraste para mover.": "Arrastra para mover.",
+  "Ajustou o quadro “{name}”": "Ajustó el marco “{name}”",
+  "Criou o quadro “{name}”": "Creó el marco “{name}”",
 };
