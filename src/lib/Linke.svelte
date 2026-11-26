@@ -6,7 +6,7 @@
   let { size = 16 }: { size?: number } = $props();
 </script>
 
-<svg width={size} height={size} viewBox="8 8 32 32" aria-hidden="true" class="linke">
+<svg width={size} height={size} viewBox="8 10 32 32" aria-hidden="true" class="linke">
   <path
     fill="currentColor"
     fill-rule="evenodd"
