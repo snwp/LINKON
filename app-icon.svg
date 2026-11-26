@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <!-- Ícone do Linkon: um L feito de dois retângulos e um nó circular solto, como um ponto de ligação. Grade de 64 px. -->
+  <!-- Ícone do Linkon: a Bolinha, o mascote (um círculo com dois olhos vazados), mesma geometria de src/lib/Bolinha.svelte em escala 22×. -->
   <rect width="1024" height="1024" rx="224" fill="#0a0a0a"/>
-  <rect x="320" y="256" width="128" height="512" fill="#ffffff"/>
-  <rect x="320" y="640" width="384" height="128" fill="#ffffff"/>
-  <circle cx="640" cy="320" r="64" fill="#ffffff"/>
+  <circle cx="512" cy="512" r="352" fill="#ffffff"/>
+  <rect x="358" y="402" width="88" height="154" rx="44" fill="#0a0a0a"/>
+  <rect x="578" y="402" width="88" height="154" rx="44" fill="#0a0a0a"/>
 </svg>

@@ -27,6 +27,7 @@
   import { refInfo } from './refs';
   import Panel from './Panel.svelte';
   import ClaudePanel from './ClaudePanel.svelte';
+  import Bolinha from '$lib/Bolinha.svelte';
   import SelectionBar from './SelectionBar.svelte';
   import { takePending } from '$lib/agent.svelte';
   import PromptBubble from './PromptBubble.svelte';
@@ -622,7 +623,7 @@
       const here = route.url.pathname === '/editor' && Number(route.url.searchParams.get('id')) === page.id;
       if (!here && getAiNotify()) {
         const name = title.trim() || 'Sem título';
-        notify(failure ? `O Claude parou com erro em “${name}”.` : `O Claude terminou “${name}”.`, true, `/editor?id=${page.id}`);
+        notify(failure ? `A Bolinha parou com erro em “${name}”.` : `A Bolinha terminou “${name}”.`, true, `/editor?id=${page.id}`);
       }
     }
     finished();
@@ -763,9 +764,9 @@
       </button>
     {/if}
     {#if panels.right}
-      <button class="restore right" onclick={() => setPanel('right', false)} data-tip="Mostrar o Claude">
+      <button class="restore right" onclick={() => setPanel('right', false)} data-tip="Mostrar a Bolinha">
         {#if aiRun}<span class="mini-pixels" aria-hidden="true">{#each [0, 1, 2, 3] as i (i)}<span style={`animation-delay:${i * 120}ms`}></span>{/each}</span>{/if}
-        Claude
+        <Bolinha size={15} />Bolinha
         <PanelRightOpen size={15} aria-hidden="true" />
       </button>
     {/if}

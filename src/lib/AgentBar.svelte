@@ -7,6 +7,7 @@
   import { store, reload, addFiles, projectName } from '$lib/store.svelte';
   import { setPending } from '$lib/agent.svelte';
   import ModelPicker from '$lib/ModelPicker.svelte';
+  import Bolinha from '$lib/Bolinha.svelte';
   import { emptyDoc } from '$lib/editor/doc';
 
   let text = $state('');
@@ -64,8 +65,10 @@
   }
 </script>
 
-<div class="bar" role="group" aria-label="Agente">
-  <label class="visually-hidden" for="agente-pedido">Pedido para o agente</label>
+<div class="bar" role="group" aria-label="Bolinha">
+  <label class="visually-hidden" for="agente-pedido">Pedido para a Bolinha</label>
+  <div class="ask">
+  <span class="mascot"><Bolinha size={18} /></span>
   <textarea
     id="agente-pedido"
     bind:this={input}
@@ -75,6 +78,7 @@
     {onkeydown}
     disabled={busy}
   ></textarea>
+  </div>
 
   <div class="row">
     <button class="ico" onclick={() => addFiles({ projectId: folderId })} aria-label="Importar arquivos" data-tip="Importar arquivos">
@@ -108,6 +112,16 @@
 
   .bar:focus-within {
     border-color: #4a4a4a;
+  }
+
+  .ask {
+    display: flex;
+    align-items: flex-start;
+  }
+
+  /* A Bolinha fica na altura da primeira linha do texto (5 px de respiro + 20 px de linha). */
+  .mascot {
+    padding: 6px 0 0 8px;
   }
 
   textarea {

@@ -1,6 +1,6 @@
 # Linkon
 
-Aplicativo desktop de organização criativa, construído a partir do briefing `../linkon_funcionamento_geral.txt` (etapas 1 a 5) e do guia `../guia_visual_linkon.pdf`. A interface é só preto e branco (tokens em `src/app.css`). O logotipo usa a fonte Science Gothic (licença OFL, em `static/fonts/`). O ícone sai de `app-icon.svg` (um L de dois retângulos e um nó circular): para regenerar, rode `npx tauri icon app-icon.svg`, apague `src-tauri/icons/android` e `ios` e copie `32x32.png` para `static/favicon.png`.
+Aplicativo desktop de organização criativa, construído a partir do briefing `../linkon_funcionamento_geral.txt` (etapas 1 a 5) e do guia `../guia_visual_linkon.pdf`. A interface é só preto e branco (tokens em `src/app.css`). O logotipo usa a fonte Science Gothic (licença OFL, em `static/fonts/`). O ícone sai de `app-icon.svg` (a Bolinha, o mascote: um círculo com dois olhos vazados): para regenerar, rode `npx tauri icon app-icon.svg`, apague `src-tauri/icons/android` e `ios` e copie `32x32.png` para `static/favicon.png`.
 
 Tecnologias: Tauri 2, Rust, Svelte 5 com TypeScript e SQLite (via `rusqlite`, modo WAL).
 
