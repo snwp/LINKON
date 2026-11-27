@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { shakeOn } from '$lib/motion';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
@@ -7,12 +8,23 @@
   import { store, reload, projectName } from '$lib/store.svelte';
   import { ago } from '$lib/format';
   import { emptyDoc, parseDoc } from '$lib/editor/doc';
-  import Editor from '$lib/editor/Editor.svelte';  import Thumb from '$lib/editor/Thumb.svelte';
+  import Editor from '$lib/editor/Editor.svelte';
+  import OpenTabs from '$lib/editor/OpenTabs.svelte';
+  import { openTab, pruneTabs } from '$lib/editor/tabs.svelte';  import Thumb from '$lib/editor/Thumb.svelte';
   import { TEMPLATES, templateDoc, type Template } from '$lib/editor/layouts';
   import { t } from '$lib/i18n.svelte';
 
   let pageId = $derived(Number(page.url.searchParams.get('id')) || null);
   let current = $derived(store.pages.find((p) => p.id === pageId) ?? null);
+  // A página aberta entra nas abas; abas de páginas excluídas saem.
+  $effect(() => {
+    const id = current?.id;
+    // Só reage à troca de página: lendo a lista aqui, fechar a aba aberta a reabriria antes de navegar.
+    if (id) untrack(() => openTab(id));
+  });
+  $effect(() => {
+    if (store.loaded) pruneTabs(new Set(store.pages.map((p) => p.id)));
+  });
   /** Tela de criar (modelos e lista de páginas): /editor?novo=1, ou ?projeto= vindo de uma pasta. */
   let creating = $derived(page.url.searchParams.has('novo') || page.url.searchParams.has('projeto'));
   /** O projeto em que você está trabalhando: a página editada por último (a lista vem da mais recente). */
@@ -60,6 +72,9 @@
   }
 </script>
 
+<div class="tabbed">
+<OpenTabs current={current ? current.id : null} />
+<div class="tab-body">
 {#if pageId}
   {#if current}
     {#key current.id}
@@ -127,8 +142,21 @@
     {/if}
   </div>
 {/if}
+</div>
+</div>
 
 <style>
+  .tabbed {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
+  }
+
+  .tab-body {
+    min-height: 0;
+    overflow: auto;
+  }
+
   /* Sem nenhum projeto ainda: só o botão, no centro da área (acima da caixa do agente). */
   .start {
     display: grid;

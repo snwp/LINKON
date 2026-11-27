@@ -4,7 +4,7 @@
   import { SvelteSet } from 'svelte/reactivity';
   import { goto } from '$app/navigation';
   import { page as route } from '$app/state';
-  import { ArrowLeft, Undo2, Redo2, Minus, Plus, Eye, Monitor, Smartphone, Trash2, PanelLeftOpen, PanelRightOpen, SquarePlus, Pencil } from '@lucide/svelte';
+  import { ArrowLeft, Undo2, Redo2, Minus, Plus, Eye, Monitor, Smartphone, Trash2, PanelLeftOpen, PanelRightOpen, PanelLeft, PanelRight, SquarePlus, Pencil } from '@lucide/svelte';
   import { openMenu } from '$lib/menu.svelte';
   import { toMobile } from './layouts';
   import { api, message, type Page } from '$lib/api';
@@ -905,6 +905,7 @@
 <div class="editor">
   <header class="bar">
     <a class="btn icon-btn" href="/" aria-label={t('Voltar ao Início')} data-tip={t('Voltar ao Início')}><ArrowLeft size={16} aria-hidden="true" /></a>
+    <button class="btn icon-btn" onclick={() => setPanel('left', !panels.left)} aria-pressed={!panels.left} aria-label={t('Painel de camadas')} data-tip={panels.left ? t('Mostrar o painel') : t('Esconder o painel')}><PanelLeft size={16} aria-hidden="true" /></button>
     <label class="visually-hidden" for="pagina-titulo">{t('Título da página')}</label>
     <input id="pagina-titulo" class="title" bind:value={title} oninput={scheduleSave} maxlength="200" />
     <span class="status mono" class:error={status === 'error'} aria-live="polite">{#if statusText}<span class="swap" in:textSwap>{statusText}</span>{/if}</span>
@@ -925,6 +926,7 @@
       <button class="btn icon-btn" onclick={() => setZoom(zoom * 1.2)} aria-label={t('Aumentar zoom')}><Plus size={14} aria-hidden="true" /></button>
     </div>
     <button class="btn" onclick={preview}><Eye size={15} aria-hidden="true" />{t('Visualizar')}</button>
+    <button class="btn icon-btn" onclick={() => setPanel('right', !panels.right)} aria-pressed={!panels.right} aria-label={t('Painel do Linke')} data-tip={panels.right ? t('Mostrar Linke') : t('Esconder Linke')}><PanelRight size={16} aria-hidden="true" /></button>
   </header>
 
   <div class="body" style={`grid-template-columns:${panels.left ? '0' : '240px'} minmax(0, 1fr) ${panels.right ? '0' : '340px'}`}>
@@ -1130,6 +1132,12 @@
     padding: var(--s2) var(--s3);
     border-bottom: 1px solid var(--line);
     background: var(--panel);
+  }
+
+  /* Painel à mostra: o botão fica marcado. */
+  .icon-btn[aria-pressed='true'] {
+    background: var(--card);
+    color: var(--fg);
   }
 
   .icon-btn {

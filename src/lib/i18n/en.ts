@@ -421,4 +421,11 @@ export const en: Record<string, string> = {
   "Vão · Portfólio": "Vão · Portfolio",
   "Noor · Link na bio": "Noor · Link in bio",
   "Pauta · App": "Pauta · App",
+  "Projetos abertos": "Open projects",
+  "Fechar “{title}”": "Close “{title}”",
+  "Abrir outro projeto": "Open another project",
+  "Painel de camadas": "Layers panel",
+  "Painel do Linke": "Linke panel",
+  "Esconder o painel": "Hide the panel",
+  "Esconder Linke": "Hide Linke",
 };
