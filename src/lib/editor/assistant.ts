@@ -367,9 +367,18 @@ export function getAiModel(): string {
     // Sem armazenamento local, fica o padrão.
   }
   id = LEGACY[id] ?? id;
+  // Provedor cadastrado nas Configurações; se ele tiver sumido, o backend avisa no pedido.
+  if (isProviderModel(id)) return id;
   const m = AI_MODELS.find((x) => x.id === id);
   return m && !m.locked ? m.id : DEFAULT_MODEL;
 }
+
+/** Modelo da predefinição NVIDIA (build.nvidia.com, API gratuita). */
+// Testado em 2026-11-27: segue o formato e responde em ~45 s; o Kimi K3.1 ficou minutos na fila do plano gratuito.
+export const NVIDIA_MODEL = 'nvidia/nemotron-3.5-lightning-30b-a3b';
+
+/** "p:<id>" = provedor compatível com a OpenAI (ver Configurações > Assistente de IA). */
+export const isProviderModel = (id: string) => /^p:[A-Za-z0-9_-]{1,40}$/.test(id);
 
 export function setAiModel(model: string) {
   try {
@@ -380,8 +389,10 @@ export function setAiModel(model: string) {
 }
 
 /** Traduz os erros mais comuns do Claude Code para algo que a pessoa consiga resolver. */
-export function friendlyAiError(raw: string): string {
+export function friendlyAiError(raw: string, viaProvider = false): string {
   const low = raw.toLowerCase();
+  // O erro de um provedor já vem explicado pelo backend; as dicas abaixo são do Claude Code.
+  if (viaProvider) return low.includes('cancel') ? t('Pedido interrompido.') : `${t('O assistente não conseguiu responder.')} ${raw}`.trim();
   if (low.includes('não foi encontrado') || low.includes('not found') || low.includes('program not found')) {
     return t('Não encontrei o Claude Code neste computador. Instale o Claude Code e entre com sua conta; depois tente de novo.');
   }

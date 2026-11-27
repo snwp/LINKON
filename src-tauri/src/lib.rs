@@ -1,4 +1,5 @@
 mod ai;
+mod aiconf;
 mod backup;
 mod bases;
 mod db;
@@ -500,6 +501,9 @@ pub fn run() {
             ai::ai_check,
             ai::ai_run,
             ai::ai_cancel,
+            ai::ai_config,
+            ai::ai_save_config,
+            ai::ai_set_key,
             bases::list_bases,
             bases::add_base,
             bases::delete_base,

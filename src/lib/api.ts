@@ -109,6 +109,12 @@ type Api = {
    */
   aiRun(req: AiRequest, onLine: (line: string) => void): Promise<void>;
   aiCancel(runId: string): Promise<void>;
+  /** Provedores compatíveis com a OpenAI (sem a chave, só se há uma guardada) e servidores MCP. */
+  aiConfig(): Promise<{ providers: (AiProvider & { hasKey: boolean })[]; mcp: McpServer[] }>;
+  /** Grava a lista inteira; o backend valida. Provedor removido perde a chave no cofre. */
+  aiSaveConfig(config: { providers: AiProvider[]; mcp: McpServer[] }): Promise<void>;
+  /** Guarda a chave do provedor no cofre do Windows; vazia apaga. A chave nunca volta para a interface. */
+  aiSetKey(id: string, key: string): Promise<void>;
 
   /** Grava o site da interface em Documentos/Linkon. Devolve a pasta relativa ("pasta/interface"). */
   syncSite(pageId: number, html: string, pages?: [string, string][]): Promise<string>;
@@ -160,6 +166,10 @@ export type ImageRequest = {
   model: string;
   projectId: number | null;
 };
+
+export type AiProvider = { id: string; name: string; base_url: string; model: string };
+/** Local (`command`, `args`, `env`) ou remoto (`url`). */
+export type McpServer = { name: string; command: string; args: string[]; env: Record<string, string>; url: string };
 
 export type AiRequest = {
   runId: string;
@@ -250,6 +260,9 @@ const tauriApi: Api = {
     }
   },
   aiCancel: (runId) => invoke('ai_cancel', { runId }),
+  aiConfig: () => invoke('ai_config'),
+  aiSaveConfig: (config) => invoke('ai_save_config', { config }),
+  aiSetKey: (id, key) => invoke('ai_set_key', { id, key }),
 
   syncSite: (pageId, html, pages) => invoke('sync_site', { pageId, html, pages }),
   openInBrowser: (pageId, html, pages) => invoke('open_in_browser', { pageId, html, pages }),
@@ -513,6 +526,15 @@ function memoryApi(): Api {
       throw tr('O assistente só funciona no app desktop, usando o Claude Code instalado neste computador.');
     },
     async aiCancel() {},
+    async aiConfig() {
+      return { providers: [], mcp: [] };
+    },
+    async aiSaveConfig() {
+      throw tr('Provedores e MCPs só podem ser cadastrados no app desktop.');
+    },
+    async aiSetKey() {
+      throw tr('A chave só pode ser guardada no app desktop.');
+    },
 
     async syncSite() {
       return '';

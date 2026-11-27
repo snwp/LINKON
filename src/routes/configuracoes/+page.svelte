@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { HardDriveDownload, RotateCcw } from '@lucide/svelte';
-  import { api, message, type ComponentBase } from '$lib/api';
+  import { api, message, type AiProvider, type ComponentBase, type McpServer } from '$lib/api';
   import { store, reload, notify, stamp } from '$lib/store.svelte';
   import { flushAll } from '$lib/pending';
-  import { friendlyAiError } from '$lib/editor/assistant';
+  import { friendlyAiError, getAiModel, setAiModel, NVIDIA_MODEL } from '$lib/editor/assistant';
   import ModelPicker from '$lib/ModelPicker.svelte';
   import { getAiNotify, setAiNotify } from '$lib/editor/background.svelte';
   import { slidingPill } from '$lib/motion';
@@ -177,6 +177,98 @@
       bases = bases.filter((x) => x.id !== b.id);
     } catch (e) {
       baseError = message(e);
+    }
+  }
+
+  // ---------- provedores de IA e servidores MCP ----------
+  // A lista mora no backend (ai-config.json); a chave de cada provedor, no cofre do Windows.
+  type ProviderRow = AiProvider & { hasKey: boolean };
+  let providers = $state<ProviderRow[]>([]);
+  let mcps = $state<McpServer[]>([]);
+  let aiConfError = $state('');
+  let provDraft = $state({ name: '', base_url: '', model: '' });
+  let provKeys = $state<Record<string, string>>({});
+  let mcpDraft = $state({ name: '', kind: 'local' as 'local' | 'remote', command: '', args: '', env: '', url: '' });
+  // shortcut: modelo da predefinição fixo aqui; trocar quando a NVIDIA tirar ou mudar o modelo gratuito.
+  const NVIDIA = { name: 'NVIDIA', base_url: 'https://integrate.api.nvidia.com/v1', model: NVIDIA_MODEL };
+
+  async function loadAiConfig() {
+    const c = await api.aiConfig().catch(() => ({ providers: [], mcp: [] }));
+    providers = c.providers;
+    mcps = c.mcp;
+  }
+  onMount(loadAiConfig);
+
+  async function saveAiConfig(next: { providers: AiProvider[]; mcp: McpServer[] }): Promise<boolean> {
+    aiConfError = '';
+    try {
+      await api.aiSaveConfig({ providers: next.providers.map(({ id, name, base_url, model }) => ({ id, name, base_url, model })), mcp: next.mcp });
+      await loadAiConfig();
+      return true;
+    } catch (e) {
+      aiConfError = message(e);
+      return false;
+    }
+  }
+
+  function slug(name: string, taken: string[]): string {
+    const base = name.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'ia';
+    let id = base;
+    for (let i = 2; taken.includes(id); i++) id = `${base}-${i}`;
+    return id;
+  }
+
+  async function addProvider() {
+    const d = { name: provDraft.name.trim(), base_url: provDraft.base_url.trim(), model: provDraft.model.trim() };
+    const p = { id: slug(d.name, providers.map((x) => x.id)), ...d };
+    if (await saveAiConfig({ providers: [...providers, p], mcp: mcps })) {
+      provDraft = { name: '', base_url: '', model: '' };
+      notify(t('Provedor “{name}” adicionado. Agora guarde a chave dele.', { name: p.name }));
+    }
+  }
+
+  async function removeProvider(p: ProviderRow) {
+    if (await saveAiConfig({ providers: providers.filter((x) => x.id !== p.id), mcp: mcps })) {
+      // O Linke deixa de usar o provedor removido.
+      if (getAiModel() === `p:${p.id}`) setAiModel('');
+    }
+  }
+
+  async function saveProviderKey(p: ProviderRow, key: string) {
+    aiConfError = '';
+    try {
+      await api.aiSetKey(p.id, key);
+      provKeys[p.id] = '';
+      await loadAiConfig();
+      notify(key ? t('Chave guardada.') : t('Chave apagada.'));
+    } catch (e) {
+      aiConfError = message(e);
+    }
+  }
+
+  /** "CHAVE=valor" por linha; linhas vazias ficam de fora. */
+  function parseEnv(text: string): Record<string, string> {
+    const env: Record<string, string> = {};
+    for (const line of text.split('\n').map((l) => l.trim()).filter(Boolean)) {
+      const i = line.indexOf('=');
+      env[i < 0 ? line : line.slice(0, i).trim()] = i < 0 ? '' : line.slice(i + 1).trim();
+    }
+    return env;
+  }
+
+  async function addMcp() {
+    const d = mcpDraft;
+    const local = d.kind === 'local';
+    const m: McpServer = {
+      name: d.name.trim(),
+      command: local ? d.command.trim() : '',
+      args: local ? d.args.split('\n').map((a) => a.trim()).filter(Boolean) : [],
+      env: local ? parseEnv(d.env) : {},
+      url: local ? '' : d.url.trim(),
+    };
+    if (await saveAiConfig({ providers, mcp: [...mcps, m] })) {
+      mcpDraft = { name: '', kind: d.kind, command: '', args: '', env: '', url: '' };
+      notify(t('MCP “{name}” adicionado.', { name: m.name }));
     }
   }
 
@@ -425,6 +517,84 @@
           <button class="btn primary" disabled={baseBusy || !baseDraft.trim()}>{baseBusy ? t('Lendo o site…') : t('Adicionar')}</button>
         </form>
         {#if baseError}<p class="error-text">{baseError}</p>{/if}
+
+        <h3 class="sub-h">{t('Outras APIs de IA')}</h3>
+        <p class="small">
+          {t('O Claude Code continua sendo o padrão. Aqui você acrescenta APIs compatíveis com a da OpenAI; cada uma aparece no seletor de modelo do Linke. A chave fica no cofre do Windows e só é enviada para a URL cadastrada.')}
+        </p>
+        {#each providers as p (p.id)}
+          <div class="path base">
+            <span class="base-name">{p.name} · {p.model}<code class="mono muted">{p.base_url}</code></span>
+            <button class="btn" onclick={() => removeProvider(p)}>{t('Remover')}</button>
+          </div>
+          {#if p.hasKey}
+            <div class="ai-status base">
+              <span class="dot ok"></span>
+              <span>{t('Chave guardada no cofre do Windows')}</span>
+              <button class="btn" onclick={() => saveProviderKey(p, '')}>{t('Apagar chave')}</button>
+            </div>
+          {:else}
+            <form class="key-row base" onsubmit={(e) => (e.preventDefault(), saveProviderKey(p, (provKeys[p.id] ?? '').trim()))}>
+              <label class="visually-hidden" for={`chave-${p.id}`}>{t('Chave de {name}', { name: p.name })}</label>
+              <input id={`chave-${p.id}`} class="field" type="password" autocomplete="off" spellcheck="false" placeholder={t('Chave de {name}', { name: p.name })} bind:value={provKeys[p.id]} />
+              <button class="btn primary" disabled={!(provKeys[p.id] ?? '').trim()}>{t('Guardar chave')}</button>
+            </form>
+          {/if}
+        {/each}
+        <form class="stack" onsubmit={(e) => (e.preventDefault(), addProvider())}>
+          <div class="key-row">
+            <label class="visually-hidden" for="prov-nome">{t('Nome')}</label>
+            <input id="prov-nome" class="field" autocomplete="off" placeholder={t('Nome')} bind:value={provDraft.name} />
+            <label class="visually-hidden" for="prov-modelo">{t('Modelo')}</label>
+            <input id="prov-modelo" class="field" autocomplete="off" spellcheck="false" placeholder={t('Modelo')} bind:value={provDraft.model} />
+          </div>
+          <div class="key-row">
+            <label class="visually-hidden" for="prov-url">{t('URL base')}</label>
+            <input id="prov-url" class="field" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…/v1" bind:value={provDraft.base_url} />
+            <button type="button" class="btn" onclick={() => (provDraft = { ...NVIDIA })}>{t('Preencher com NVIDIA')}</button>
+            <button class="btn primary" disabled={!provDraft.name.trim() || !provDraft.base_url.trim() || !provDraft.model.trim()}>{t('Adicionar')}</button>
+          </div>
+        </form>
+        {#if provDraft.base_url.includes('nvidia.com')}
+          <p class="small">{t('Crie a chave (começa com nvapi-) em build.nvidia.com, entrando com sua conta, e cole aqui depois de adicionar.')}</p>
+        {/if}
+
+        <h3 class="sub-h">{t('Servidores MCP')}</h3>
+        <p class="small warn">
+          {t('Um MCP local roda um programa neste computador, com as mesmas permissões que você. O Linke pode usar as ferramentas dele sem pedir confirmação. Só cadastre servidores de quem você confia.')}
+        </p>
+        <p class="small">{t('Os MCPs valem quando o Linke roda pelo Claude Code; as outras APIs não usam ferramentas.')}</p>
+        {#each mcps as m (m.name)}
+          <div class="path base">
+            <span class="base-name">{m.name}<code class="mono muted">{m.url || [m.command, ...m.args].join(' ')}</code></span>
+            <button class="btn" onclick={() => saveAiConfig({ providers, mcp: mcps.filter((x) => x.name !== m.name) })}>{t('Remover')}</button>
+          </div>
+        {/each}
+        <form class="stack" onsubmit={(e) => (e.preventDefault(), addMcp())}>
+          <div class="key-row">
+            <label class="visually-hidden" for="mcp-nome">{t('Nome')}</label>
+            <input id="mcp-nome" class="field" autocomplete="off" spellcheck="false" placeholder={t('Nome (letras, números, - e _)')} bind:value={mcpDraft.name} />
+            <div class="seg" use:slidingPill role="group" aria-label={t('Tipo de MCP')}>
+              <button type="button" aria-pressed={mcpDraft.kind === 'local'} onclick={() => (mcpDraft.kind = 'local')}>{t('Local')}</button>
+              <button type="button" aria-pressed={mcpDraft.kind === 'remote'} onclick={() => (mcpDraft.kind = 'remote')}>{t('Remoto')}</button>
+            </div>
+          </div>
+          {#if mcpDraft.kind === 'local'}
+            <label class="visually-hidden" for="mcp-cmd">{t('Comando')}</label>
+            <input id="mcp-cmd" class="field" autocomplete="off" spellcheck="false" placeholder={t('Comando, por exemplo npx')} bind:value={mcpDraft.command} />
+            <label class="visually-hidden" for="mcp-args">{t('Argumentos, um por linha')}</label>
+            <textarea id="mcp-args" class="field area" rows="3" spellcheck="false" placeholder={t('Argumentos, um por linha')} bind:value={mcpDraft.args}></textarea>
+            <label class="visually-hidden" for="mcp-env">{t('Variáveis de ambiente, NOME=valor por linha')}</label>
+            <textarea id="mcp-env" class="field area" rows="2" spellcheck="false" placeholder={t('Variáveis de ambiente, NOME=valor por linha')} bind:value={mcpDraft.env}></textarea>
+          {:else}
+            <label class="visually-hidden" for="mcp-url">{t('URL do servidor')}</label>
+            <input id="mcp-url" class="field" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…/mcp" bind:value={mcpDraft.url} />
+          {/if}
+          <div class="key-row end">
+            <button class="btn primary" disabled={!mcpDraft.name.trim() || !(mcpDraft.kind === 'local' ? mcpDraft.command : mcpDraft.url).trim()}>{t('Adicionar MCP')}</button>
+          </div>
+        </form>
+        {#if aiConfError}<p class="error-text">{aiConfError}</p>{/if}
       </section>
 
       <section id="imagens" aria-labelledby="h-img">
@@ -754,6 +924,29 @@
   .key-row .field {
     flex: 1;
     min-width: 0;
+  }
+
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s2);
+    margin-top: var(--s2);
+  }
+
+  .key-row.end {
+    justify-content: flex-end;
+  }
+
+  .field.area {
+    height: auto;
+    padding: var(--s2) var(--s3);
+    resize: vertical;
+    font: 13px var(--font-mono, monospace);
+  }
+
+  .warn {
+    padding-left: var(--s3);
+    border-left: 2px solid var(--fg);
   }
 
   .toggle {

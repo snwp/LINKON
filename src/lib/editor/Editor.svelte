@@ -46,6 +46,7 @@
     buildPrompt,
     friendlyAiError,
     getAiModel,
+    isProviderModel,
     parseOp,
     readStreamLine,
     type AiUsage,
@@ -885,7 +886,7 @@
       if (!failure) failure = message(e);
     }
     if (buffer.trim()) handleLine(buffer);
-    if (failure) aiLog.push({ kind: 'error', text: friendlyAiError(failure) });
+    if (failure) aiLog.push({ kind: 'error', text: friendlyAiError(failure, isProviderModel(model)) });
     // Rodada que só pediu referências: segue para a busca (no fim desta função) em vez de dizer que nada mudou.
     const wantsRefs = !!refsQuery && !failure && !detached;
     if (!failure && !wantsRefs && applied === 0 && said === 0) aiLog.push({ kind: 'ai', text: t('Nada foi alterado.') });

@@ -3,6 +3,8 @@
   import { loadUsage, sum, dayStart, weekStart, type UsageRec } from '$lib/usage';
   import { AI_MODELS } from '$lib/editor/assistant';
   import { locale, t } from '$lib/i18n.svelte';
+  import { onMount } from 'svelte';
+  import { api } from '$lib/api';
 
   const recs: UsageRec[] = loadUsage();
   const now = Date.now();
@@ -41,7 +43,15 @@
   }));
   const max = $derived(Math.max(1, ...days.map((d) => d.input + d.output)));
 
-  const modelName = (id: string) => AI_MODELS.find((m) => m.id === id)?.name ?? (id || t('Padrão'));
+  // Pedidos por provedor ficam como "p:<id>"; o nome vem do cadastro (ou o id, se ele foi removido).
+  let providerNames = $state<Record<string, string>>({});
+  onMount(() => {
+    api
+      .aiConfig()
+      .then((c) => (providerNames = Object.fromEntries(c.providers.map((p) => [`p:${p.id}`, `${p.name} · ${p.model}`]))))
+      .catch(() => {});
+  });
+  const modelName = (id: string) => providerNames[id] ?? AI_MODELS.find((m) => m.id === id)?.name ?? (id.replace(/^p:/, '') || t('Padrão'));
   const byModel = Object.entries(
     recs
       .filter((r) => r.at >= weekStart(now))

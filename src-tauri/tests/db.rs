@@ -35,3 +35,7 @@ mod publish;
 #[allow(dead_code)]
 #[path = "../src/serve.rs"]
 mod serve;
+
+#[allow(dead_code)]
+#[path = "../src/aiconf.rs"]
+mod aiconf;

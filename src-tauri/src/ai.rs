@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
+use crate::aiconf;
 
 const MAX_PROMPT_BYTES: usize = 512 * 1024;
 /// Imagens de referência (ver refs.rs) que vão junto do pedido: poucas e pequenas.
@@ -55,6 +56,8 @@ const MODELS: &[&str] = &[
 #[derive(Default)]
 pub struct AiRuns {
     children: Mutex<HashMap<String, Child>>,
+    /// Pedidos em andamento por um provedor HTTP (sem processo para derrubar).
+    http: Mutex<HashSet<String>>,
     cancelled: Mutex<HashSet<String>>,
 }
 
@@ -148,11 +151,17 @@ pub fn ai_run(
     if run_id.is_empty() || run_id.len() > 32 || !run_id.chars().all(|c| c.is_ascii_alphanumeric()) {
         return Err("Pedido inválido.".into());
     }
-    if !MODELS.contains(&model.as_str()) {
-        return Err("Modelo desconhecido.".into());
-    }
     if prompt.len() > MAX_PROMPT_BYTES || system_prompt.len() > MAX_PROMPT_BYTES {
         return Err("A página é grande demais para enviar ao assistente.".into());
+    }
+    let config = aiconf::load(&config_path(&app)?);
+    // "p:<id>" = provedor compatível com a OpenAI cadastrado nas Configurações.
+    if let Some(id) = model.strip_prefix("p:") {
+        let p = config.providers.into_iter().find(|p| p.id == id).ok_or("Esse provedor de IA não está mais cadastrado. Escolha outro modelo.")?;
+        return run_provider(app, run_id, p, prompt, system_prompt);
+    }
+    if !MODELS.contains(&model.as_str()) {
+        return Err("Modelo desconhecido.".into());
     }
 
     // Pasta vazia e própria: o Claude Code roda sem ferramentas, mas nem assim deve partir de uma pasta do usuário.
@@ -160,6 +169,11 @@ pub fn ai_run(
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let system_file = dir.join(format!("system-{run_id}.md"));
     std::fs::write(&system_file, &system_prompt).map_err(|e| e.to_string())?;
+    let mcp_file = dir.join(format!("mcp-{run_id}.json"));
+    if !config.mcp.is_empty() {
+        aiconf::validate(&config)?;
+        std::fs::write(&mcp_file, aiconf::mcp_json(&config.mcp).to_string()).map_err(|e| e.to_string())?;
+    }
 
     // Com imagens, o pedido vai como mensagem stream-json (texto puro não leva imagem).
     let images = images.unwrap_or_default();
@@ -186,6 +200,12 @@ pub fn ai_run(
         .arg(&system_file);
     if !model.is_empty() {
         cmd.args(["--model", &model]);
+    }
+    // MCPs cadastrados: só eles (--strict-mcp-config acima) e com as ferramentas liberadas, porque no -p não há
+    // quem aprove. As ferramentas embutidas (arquivos, terminal) seguem desligadas por --tools "".
+    if !config.mcp.is_empty() {
+        cmd.arg("--mcp-config").arg(&mcp_file).arg("--allowedTools");
+        cmd.args(config.mcp.iter().map(|m| format!("mcp__{}", m.name)));
     }
     if !images.is_empty() {
         cmd.args(["--input-format", "stream-json"]);
@@ -219,6 +239,7 @@ pub fn ai_run(
             .and_then(|mut c| c.wait().ok());
         let cancelled = runs.cancelled.lock().map(|mut s| s.remove(&run_id)).unwrap_or(false);
         let _ = std::fs::remove_file(&system_file);
+        let _ = std::fs::remove_file(&mcp_file);
 
         let error = if cancelled {
             Some("cancelado".to_string())
@@ -241,10 +262,179 @@ pub fn ai_run(
 #[tauri::command]
 pub fn ai_cancel(app: AppHandle, run_id: String) -> Result<(), String> {
     let runs = app.state::<AiRuns>();
+    if runs.http.lock().map_err(|e| e.to_string())?.contains(&run_id) {
+        runs.cancelled.lock().map_err(|e| e.to_string())?.insert(run_id);
+        return Ok(());
+    }
     if let Some(child) = runs.children.lock().map_err(|e| e.to_string())?.get_mut(&run_id) {
         runs.cancelled.lock().map_err(|e| e.to_string())?.insert(run_id);
         let _ = child.kill();
     }
+    Ok(())
+}
+
+// ---------- provedores compatíveis com a OpenAI ----------
+
+fn config_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join("ai-config.json"))
+}
+
+fn key_entry(id: &str) -> Result<keyring::Entry, String> {
+    if !aiconf::valid_slug(id) {
+        return Err("Provedor inválido.".into());
+    }
+    keyring::Entry::new("Linkon", &format!("ai-provider-{id}")).map_err(|e| format!("O cofre de senhas do Windows não respondeu ({e})."))
+}
+
+fn read_key(id: &str) -> Option<String> {
+    key_entry(id).ok()?.get_password().ok().filter(|k| !k.is_empty())
+}
+
+fn delete_key(id: &str) -> Result<(), String> {
+    match key_entry(id)?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(format!("Não foi possível apagar a chave ({e}).")),
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderView {
+    #[serde(flatten)]
+    provider: aiconf::Provider,
+    has_key: bool,
+}
+
+#[derive(Serialize)]
+pub struct ConfigView {
+    providers: Vec<ProviderView>,
+    mcp: Vec<aiconf::McpServer>,
+}
+
+/// Provedores (com a indicação de chave guardada, nunca a chave) e MCPs.
+#[tauri::command]
+pub fn ai_config(app: AppHandle) -> Result<ConfigView, String> {
+    let c = aiconf::load(&config_path(&app)?);
+    let providers = c.providers.into_iter().map(|p| ProviderView { has_key: read_key(&p.id).is_some(), provider: p }).collect();
+    Ok(ConfigView { providers, mcp: c.mcp })
+}
+
+/// Grava a lista inteira. A chave de um provedor que saiu da lista sai também do cofre.
+#[tauri::command]
+pub fn ai_save_config(app: AppHandle, config: aiconf::AiConfig) -> Result<(), String> {
+    let path = config_path(&app)?;
+    let old = aiconf::load(&path);
+    aiconf::save(&path, &config)?;
+    for p in old.providers.iter().filter(|o| !config.providers.iter().any(|n| n.id == o.id)) {
+        delete_key(&p.id)?;
+    }
+    Ok(())
+}
+
+/// Guarda a chave do provedor no cofre do Windows; vazia apaga. A chave nunca volta para a interface.
+#[tauri::command]
+pub fn ai_set_key(id: String, key: String) -> Result<(), String> {
+    let key = key.trim();
+    if key.is_empty() {
+        return delete_key(&id);
+    }
+    if !aiconf::valid_key(key) {
+        return Err("Isso não parece uma chave de API (sem espaços, de 8 a 512 caracteres).".into());
+    }
+    key_entry(&id)?.set_password(key).map_err(|e| format!("Não foi possível guardar a chave ({e})."))
+}
+
+/// Chat completions com streaming. Cada pedaço de texto sai como linha stream-json (ver aiconf::text_event).
+fn run_provider(app: AppHandle, run_id: String, p: aiconf::Provider, prompt: String, system_prompt: String) -> Result<(), String> {
+    // Revalida na hora de mandar: a chave só vai para a URL cadastrada, e só por HTTPS (ou para esta máquina).
+    if !aiconf::valid_url(&p.base_url) {
+        return Err("A URL do provedor precisa começar com https://.".into());
+    }
+    let key = read_key(&p.id).ok_or_else(|| format!("Guarde a chave de “{}” em Configurações, na seção Assistente de IA.", p.name))?;
+    app.state::<AiRuns>().http.lock().map_err(|e| e.to_string())?.insert(run_id.clone());
+
+    std::thread::spawn(move || {
+        let started = std::time::Instant::now();
+        let runs = app.state::<AiRuns>();
+        let is_cancelled = || runs.cancelled.lock().map(|s| s.contains(&run_id)).unwrap_or(false);
+        let agent = ureq::AgentBuilder::new()
+            .timeout_connect(std::time::Duration::from_secs(20))
+            // Entre um pedaço e outro; um modelo que raciocina pode ficar um tempo calado antes de escrever.
+            .timeout_read(std::time::Duration::from_secs(240))
+            .build();
+        let resp = agent
+            .post(&aiconf::chat_url(&p.base_url))
+            .set("Authorization", &format!("Bearer {key}"))
+            .set("Accept", "text/event-stream")
+            .send_json(aiconf::chat_body(&p.model, &system_prompt, &prompt));
+
+        let mut text = String::new();
+        let mut usage = (0, 0);
+        let mut error: Option<String> = None;
+        match resp {
+            Ok(r) => {
+                for line in BufReader::new(r.into_reader()).lines() {
+                    if is_cancelled() {
+                        break;
+                    }
+                    let line = match line {
+                        Ok(l) => l,
+                        Err(e) => {
+                            error = Some(format!("A conexão com {} caiu ({e}).", p.name));
+                            break;
+                        }
+                    };
+                    let Some(c) = aiconf::parse_sse(&line) else { continue };
+                    if let Some(e) = c.error {
+                        error = Some(e);
+                        break;
+                    }
+                    if !c.text.is_empty() {
+                        text.push_str(&c.text);
+                        emit(&app, AiEvent { run_id: run_id.clone(), line: Some(aiconf::text_event(&c.text)), done: false, error: None });
+                    }
+                    if let Some(u) = c.usage {
+                        usage = u;
+                    }
+                    if c.done {
+                        break;
+                    }
+                }
+            }
+            Err(ureq::Error::Status(code, r)) => {
+                let body = r.into_string().unwrap_or_default();
+                let detail: String = serde_json::from_str::<serde_json::Value>(&body)
+                    .ok()
+                    .and_then(|v| {
+                        v.pointer("/error/message").or_else(|| v.get("detail")).or_else(|| v.get("message")).and_then(|m| m.as_str()).map(str::to_string)
+                    })
+                    .unwrap_or(body)
+                    .chars()
+                    .take(300)
+                    .collect();
+                error = Some(match code {
+                    401 | 403 => format!("{} recusou a chave. Confira a chave em Configurações. {detail}", p.name),
+                    404 => format!("{} não achou o modelo “{}” nesse endereço. {detail}", p.name, p.model),
+                    429 => format!("{} recusou por limite de uso (rate limit). {detail}", p.name),
+                    _ => format!("{} recusou o pedido ({code}). {detail}", p.name),
+                });
+            }
+            Err(e) => error = Some(format!("Sem conexão com {} ({e}).", p.name)),
+        }
+
+        let cancelled = runs.cancelled.lock().map(|mut s| s.remove(&run_id)).unwrap_or(false);
+        let _ = runs.http.lock().map(|mut s| s.remove(&run_id));
+        if !cancelled {
+            let ok = error.is_none();
+            let shown = error.clone().unwrap_or(text);
+            let ms = started.elapsed().as_millis() as u64;
+            emit(&app, AiEvent { run_id: run_id.clone(), line: Some(aiconf::result_event(ok, &shown, usage, ms)), done: false, error: None });
+        }
+        let error = if cancelled { Some("cancelado".to_string()) } else { error };
+        emit(&app, AiEvent { run_id, line: None, done: true, error });
+    });
     Ok(())
 }
 
