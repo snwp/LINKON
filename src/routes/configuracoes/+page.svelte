@@ -23,18 +23,32 @@
     { id: 'atalhos', label: 'Atalhos' },
   ];
   let current = $state('aparencia');
+  /** Depois de um clique no menu, a seção clicada fica marcada até a rolagem parar (a última nunca chega ao topo). */
+  let pinned = false;
   let content: HTMLElement | undefined = $state();
 
   function go(e: MouseEvent, id: string) {
     e.preventDefault();
     current = id;
-    document.getElementById(id)?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    const target = document.getElementById(id);
+    // Rola só a área de conteúdo. scrollIntoView rolaria também a janela quando a seção não alcança o topo
+    // (a última, Atalhos), e o app inteiro subia.
+    let scroller = target?.parentElement ?? null;
+    while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+    if (!target || !scroller) return;
+    const top = scroller.scrollTop + target.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 24;
+    pinned = true;
+    const release = () => (pinned = false);
+    scroller.addEventListener('scrollend', release, { once: true });
+    setTimeout(release, 1200); // sem rolagem (já estava lá), o scrollend não chega
+    scroller.scrollTo({ top, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }
 
   // O item do menu acompanha a seção que está no topo da área visível.
   onMount(() => {
     const io = new IntersectionObserver(
       (entries) => {
+        if (pinned) return;
         for (const en of entries) if (en.isIntersecting) current = en.target.id;
       },
       { rootMargin: '0px 0px -70% 0px' },
