@@ -383,9 +383,48 @@ export const isProviderModel = (id: string) => /^p:[A-Za-z0-9_-]{1,40}$/.test(id
 export function setAiModel(model: string) {
   try {
     localStorage.setItem(MODEL_KEY, model);
+    // Escolher no seletor põe o modelo no topo da prioridade.
+    if (model) localStorage.setItem(ORDER_KEY, JSON.stringify([model, ...savedOrder().filter((x) => x !== model)]));
   } catch {
     // Sem armazenamento local, fica o padrão do Claude Code.
   }
+}
+
+const ORDER_KEY = 'linkon.ai.order';
+function savedOrder(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(ORDER_KEY) ?? '[]');
+    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Modelos na ordem de prioridade (Claude que a assinatura cobre + provedores cadastrados): o primeiro é o
+ * que o Linke usa; se ele falhar sem fazer nada, o Linke tenta o seguinte. Provedor novo entra no fim.
+ */
+export function modelOrder(providerIds: string[]): string[] {
+  const all = [...AI_MODELS.filter((m) => !m.locked).map((m) => m.id), ...providerIds.map((id) => `p:${id}`)];
+  const saved = savedOrder();
+  const base = saved.length ? saved : [getAiModel()];
+  const known = base.filter((id, i) => all.includes(id) && base.indexOf(id) === i);
+  return [...known, ...all.filter((id) => !known.includes(id))];
+}
+
+/** Nome para mostrar: "Opus 5.5" ou o nome do provedor cadastrado. */
+export const modelLabel = (id: string, providers: { id: string; name: string }[]) =>
+  AI_MODELS.find((m) => m.id === id)?.name ?? providers.find((p) => `p:${p.id}` === id)?.name ?? id.replace(/^p:/, '');
+
+export function setModelOrder(order: string[]) {
+  try {
+    localStorage.setItem(ORDER_KEY, JSON.stringify(order));
+    localStorage.setItem(MODEL_KEY, order[0] ?? '');
+  } catch {
+    // Sem armazenamento local, a ordem volta ao padrão.
+  }
+  // O seletor de modelo da barra do Linke fica aberto em todas as telas e precisa acompanhar.
+  dispatchEvent(new Event('linkon-model'));
 }
 
 /** Traduz os erros mais comuns do Claude Code para algo que a pessoa consiga resolver. */

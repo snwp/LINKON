@@ -47,6 +47,8 @@
     friendlyAiError,
     getAiModel,
     isProviderModel,
+    modelLabel,
+    modelOrder,
     parseOp,
     readStreamLine,
     type AiUsage,
@@ -827,7 +829,7 @@
     let finished!: () => void;
     aiDone = new Promise((r) => (finished = r));
     aiStartedAt = Date.now();
-    const model = getAiModel();
+    let model = getAiModel();
     let usage: AiUsage | null = null;
     let buffer = '';
     let sawText = false;
@@ -867,26 +869,41 @@
       }
     };
 
-    try {
-      const images = refs?.map(({ media_type, data }) => ({ media_type, data }));
-      await api.aiRun({ runId, prompt, systemPrompt: SYSTEM_PROMPT, model, images }, (raw) => {
-        const r = readStreamLine(raw);
-        if (r.text) {
-          sawText = true;
-          consume(r.text);
-        }
-        if (r.result) {
-          usage = r.result.usage ?? null;
-          if (!r.result.ok) failure = r.result.text || t('erro sem detalhes');
-          else if (!sawText) consume(`${r.result.text}\n`);
-        }
-      });
-    } catch (e) {
-      // O evento "result" explica melhor (conta, limite) do que o código de saída do processo.
-      if (!failure) failure = message(e);
+    // Ordem de prioridade das Configurações: se um modelo falhar sem fazer nada, tenta o seguinte.
+    const cfg = await api.aiConfig().catch(() => ({ providers: [], mcp: [] }));
+    const usable = new Set(cfg.providers.filter((p) => p.hasKey).map((p) => `p:${p.id}`));
+    const fallbacks = modelOrder(cfg.providers.map((p) => p.id)).filter((id) => id !== model && (!isProviderModel(id) || usable.has(id)));
+    aiCancelled = false;
+    for (;;) {
+      try {
+        const images = refs?.map(({ media_type, data }) => ({ media_type, data }));
+        await api.aiRun({ runId, prompt, systemPrompt: SYSTEM_PROMPT, model, images }, (raw) => {
+          const r = readStreamLine(raw);
+          if (r.text) {
+            sawText = true;
+            consume(r.text);
+          }
+          if (r.result) {
+            usage = r.result.usage ?? null;
+            if (!r.result.ok) failure = r.result.text || t('erro sem detalhes');
+            else if (!sawText) consume(`${r.result.text}\n`);
+          }
+        });
+      } catch (e) {
+        // O evento "result" explica melhor (conta, limite) do que o código de saída do processo.
+        if (!failure) failure = message(e);
+      }
+      if (buffer.trim()) handleLine(buffer);
+      if (failure) aiLog.push({ kind: 'error', text: friendlyAiError(failure, isProviderModel(model)) });
+      const next = fallbacks.shift();
+      if (!failure || aiCancelled || applied || said || !next) break;
+      aiLog.push({ kind: 'action', text: t('Tentando com {name}', { name: modelLabel(next, cfg.providers) }) });
+      model = next;
+      failure = '';
+      buffer = '';
+      sawText = false;
+      usage = null;
     }
-    if (buffer.trim()) handleLine(buffer);
-    if (failure) aiLog.push({ kind: 'error', text: friendlyAiError(failure, isProviderModel(model)) });
     // Rodada que só pediu referências: segue para a busca (no fim desta função) em vez de dizer que nada mudou.
     const wantsRefs = !!refsQuery && !failure && !detached;
     if (!failure && !wantsRefs && applied === 0 && said === 0) aiLog.push({ kind: 'ai', text: t('Nada foi alterado.') });
@@ -926,7 +943,9 @@
     }
   }
 
+  let aiCancelled = false;
   function cancelAi() {
+    aiCancelled = true;
     if (aiRun) api.aiCancel(aiRun.runId);
   }
 

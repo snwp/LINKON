@@ -20,6 +20,12 @@
       .then((c) => (providers = c.providers))
       .catch(() => {});
   onMount(loadProviders);
+  // A ordem de prioridade nas Configurações troca o modelo em uso.
+  $effect(() => {
+    const sync = () => ((current = getAiModel()), loadProviders());
+    addEventListener('linkon-model', sync);
+    return () => removeEventListener('linkon-model', sync);
+  });
   let name = $derived(
     AI_MODELS.find((m) => m.id === current)?.name ?? providers.find((p) => `p:${p.id}` === current)?.name ?? t('Modelo'),
   );

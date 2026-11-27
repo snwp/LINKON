@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { HardDriveDownload, RotateCcw } from '@lucide/svelte';
+  import { flip } from 'svelte/animate';
+  import { ArrowDown, ArrowUp, HardDriveDownload, RotateCcw } from '@lucide/svelte';
   import { api, message, type AiProvider, type ComponentBase, type McpServer } from '$lib/api';
   import { store, reload, notify, stamp } from '$lib/store.svelte';
   import { flushAll } from '$lib/pending';
-  import { friendlyAiError, getAiModel, setAiModel, NVIDIA_MODEL } from '$lib/editor/assistant';
-  import ModelPicker from '$lib/ModelPicker.svelte';
+  import { friendlyAiError, modelLabel, modelOrder, setModelOrder, NVIDIA_MODEL } from '$lib/editor/assistant';
   import { getAiNotify, setAiNotify } from '$lib/editor/background.svelte';
   import { slidingPill } from '$lib/motion';
   import { IMAGE_PROVIDERS, IMAGE_MODELS, getImagePrefs, setImagePrefs } from '$lib/imagegen';
@@ -196,6 +196,18 @@
     const c = await api.aiConfig().catch(() => ({ providers: [], mcp: [] }));
     providers = c.providers;
     mcps = c.mcp;
+    // Provedor novo entra no fim da lista; removido, sai dela (e o Linke deixa de usá-lo).
+    order = modelOrder(providers.map((p) => p.id));
+    setModelOrder(order);
+  }
+
+  /** Prioridade dos modelos: o primeiro é o do Linke; se ele falhar, o Linke tenta o seguinte. */
+  let order = $state<string[]>([]);
+  function moveModel(i: number, d: -1 | 1) {
+    const o = [...order];
+    [o[i], o[i + d]] = [o[i + d], o[i]];
+    order = o;
+    setModelOrder(o);
   }
   onMount(loadAiConfig);
 
@@ -228,10 +240,7 @@
   }
 
   async function removeProvider(p: ProviderRow) {
-    if (await saveAiConfig({ providers: providers.filter((x) => x.id !== p.id), mcp: mcps })) {
-      // O Linke deixa de usar o provedor removido.
-      if (getAiModel() === `p:${p.id}`) setAiModel('');
-    }
+    await saveAiConfig({ providers: providers.filter((x) => x.id !== p.id), mcp: mcps });
   }
 
   async function saveProviderKey(p: ProviderRow, key: string) {
@@ -488,10 +497,27 @@
           </div>
         {/if}
 
-        <label class="line">
-          <span class="label">{t('Modelo')}</span>
-          <ModelPicker id="config-modelo" />
-        </label>
+        <div class="line prio-line">
+          <span class="label" id="l-modelos">{t('Modelos')}</span>
+          <div class="prio-box">
+            <ol class="prio" aria-labelledby="l-modelos">
+              {#each order as id, i (id)}
+                {@const p = providers.find((x) => `p:${x.id}` === id)}
+                {@const name = modelLabel(id, providers)}
+                <li animate:flip={{ duration: 160 }}>
+                  <span class="mono muted">{i + 1}</span>
+                  <span class="prio-name">
+                    {name}
+                    {#if p}<span class="muted">{p.hasKey ? p.model : t('Sem chave guardada')}</span>{/if}
+                  </span>
+                  <button class="icon" disabled={i === 0} onclick={() => moveModel(i, -1)} aria-label={t('Subir {name}', { name })}><ArrowUp size={14} /></button>
+                  <button class="icon" disabled={i === order.length - 1} onclick={() => moveModel(i, 1)} aria-label={t('Descer {name}', { name })}><ArrowDown size={14} /></button>
+                </li>
+              {/each}
+            </ol>
+            <p class="small muted">{t('O Linke usa o primeiro da lista. Se ele falhar, tenta o seguinte.')}</p>
+          </div>
+        </div>
 
         <label class="line">
           <span class="label">{t('Avisos')}</span>
@@ -520,7 +546,7 @@
 
         <h3 class="sub-h">{t('Outras APIs de IA')}</h3>
         <p class="small">
-          {t('O Claude Code continua sendo o padrão. Aqui você acrescenta APIs compatíveis com a da OpenAI; cada uma aparece no seletor de modelo do Linke. A chave fica no cofre do Windows e só é enviada para a URL cadastrada.')}
+          {t('Aqui você acrescenta APIs compatíveis com a da OpenAI; cada uma entra no fim da lista de modelos acima, onde você escolhe a prioridade. A chave fica no cofre do Windows e só é enviada para a URL cadastrada.')}
         </p>
         {#each providers as p (p.id)}
           <div class="path base">
@@ -763,6 +789,71 @@
   .label {
     color: var(--muted);
     font-size: 13px;
+  }
+
+  .prio-line {
+    align-items: start;
+  }
+
+  .prio-line .label {
+    padding-top: var(--s2);
+  }
+
+  .line > .prio-box {
+    justify-self: stretch;
+    display: flex;
+    flex-direction: column;
+    gap: var(--s2);
+  }
+
+  .prio {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: var(--card);
+  }
+
+  .prio li {
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
+    padding: var(--s2) var(--s2) var(--s2) var(--s3);
+    font-size: 13px;
+  }
+
+  .prio li + li {
+    border-top: 1px solid var(--line);
+  }
+
+  .prio-name {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    gap: var(--s2);
+    overflow-wrap: anywhere;
+  }
+
+  .icon {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--fg);
+    cursor: pointer;
+  }
+
+  .icon:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--fg) 10%, var(--bg));
+  }
+
+  .icon:disabled {
+    opacity: 0.3;
+    cursor: default;
   }
 
   .line > .themes {
