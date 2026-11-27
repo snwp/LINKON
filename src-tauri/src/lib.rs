@@ -8,6 +8,7 @@ mod imgcheck;
 mod library;
 mod pages;
 mod publish;
+mod refs;
 mod serve;
 mod site;
 
@@ -500,7 +501,8 @@ pub fn run() {
             ai::ai_cancel,
             bases::list_bases,
             bases::add_base,
-            bases::delete_base
+            bases::delete_base,
+            refs::find_references
         ])
         .run(tauri::generate_context!())
         .expect("falha ao iniciar o Linkon");

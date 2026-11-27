@@ -364,6 +364,7 @@ export const en: Record<string, string> = {
   "Volta (s)": "Cycle (s)",
   "Profundidade na rolagem": "Scroll depth",
   "Objeto 3D": "3D object",
+  "Montado por peças ({n})": "Assembled from parts ({n})",
   "Forma": "Shape",
   "Material": "Material",
   "Cor": "Color",
@@ -428,4 +429,5 @@ export const en: Record<string, string> = {
   "Painel do Linke": "Linke panel",
   "Esconder o painel": "Hide the panel",
   "Esconder Linke": "Hide Linke",
+  "Buscando fotos de referência de “{query}”": "Looking for reference photos of “{query}”",
 };

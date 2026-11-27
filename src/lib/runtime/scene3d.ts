@@ -1,11 +1,12 @@
 import {
-  ACESFilmicToneMapping, AmbientLight, BufferGeometry, CapsuleGeometry, Color, ConeGeometry, DirectionalLight, ExtrudeGeometry,
-  Group, IcosahedronGeometry, Material, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, PerspectiveCamera,
+  ACESFilmicToneMapping, AmbientLight, Box3, BoxGeometry, BufferGeometry, CapsuleGeometry, CircleGeometry, Color, ConeGeometry,
+  CylinderGeometry, DirectionalLight, ExtrudeGeometry, Group, IcosahedronGeometry, Vector3, Material, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, PerspectiveCamera,
   PMREMGenerator, Scene, Shape, SphereGeometry, Texture, TorusGeometry, TorusKnotGeometry, WebGLRenderer,
 } from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import type { Scene3D } from '../editor/doc';
+import type { Part3D, Scene3D } from '../editor/doc';
 
 /**
  * Um único WebGLRenderer para a página toda (o navegador limita os contextos a ~16). Cada elemento 3D tem um
@@ -34,9 +35,9 @@ function gl() {
 
 const rad = (d: number) => (d * Math.PI) / 180;
 
-function material(s: Scene3D, color: string): Material {
+function material(kind: Scene3D['material'], color: string): Material {
   const c = new Color(color);
-  switch (s.material) {
+  switch (kind) {
     case 'metal':
       return new MeshStandardMaterial({ color: c, metalness: 1, roughness: 0.22 });
     case 'vidro':
@@ -80,6 +81,34 @@ function geometry(shape: Scene3D['shape']): BufferGeometry {
   }
 }
 
+/** Geometrias de peça: tamanho 1, centradas na origem (a escala de cada peça vem do mesh). */
+function partGeometry(shape: Part3D['shape']): BufferGeometry {
+  switch (shape) {
+    case 'esfera': return new SphereGeometry(0.5, 40, 28);
+    case 'cilindro': return new CylinderGeometry(0.5, 0.5, 1, 48);
+    case 'cone': return new ConeGeometry(0.5, 1, 48);
+    case 'toro': {
+      // Deitado (anel no plano x-z, como confeito em volta do bolo); tubo fino: 0,12 do raio externo.
+      const g = new TorusGeometry(0.44, 0.06, 20, 64);
+      g.rotateX(Math.PI / 2);
+      return g;
+    }
+    case 'capsula': return new CapsuleGeometry(0.25, 0.5, 12, 24);
+    case 'semiesfera': {
+      // Metade de cima, fechada embaixo com um disco; desce 0,25 para a caixa ficar centrada em y.
+      const top = new SphereGeometry(0.5, 40, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+      const base = new CircleGeometry(0.5, 40);
+      base.rotateX(Math.PI / 2);
+      const g = mergeGeometries([top, base])!;
+      top.dispose();
+      base.dispose();
+      g.translate(0, -0.25, 0);
+      return g;
+    }
+    default: return new BoxGeometry(1, 1, 1);
+  }
+}
+
 function lights(scene: Scene, s: Scene3D) {
   const dir = (color: string | number, i: number, x: number, y: number, z: number) => {
     const l = new DirectionalLight(color, i);
@@ -105,7 +134,7 @@ function lights(scene: Scene, s: Scene3D) {
 }
 
 /** O que só muda quando forma, material, cores ou luz mudam (o resto é pose, lida a cada quadro). */
-const looks = (s: Scene3D) => [s.shape, s.material, s.color, s.color2, s.light].join('|');
+const looks = (s: Scene3D) => [s.shape, s.material, s.color, s.color2, s.light, s.parts?.length ? JSON.stringify(s.parts) : ''].join('|');
 
 function build(s: Scene3D) {
   const scene = new Scene();
@@ -115,7 +144,26 @@ function build(s: Scene3D) {
   const obj = new Group();
   tilt.add(obj);
   scene.add(tilt);
-  if (s.shape === 'cartoes') {
+  if (s.parts?.length) {
+    const geos = new Map<string, BufferGeometry>();
+    const inner = new Group();
+    for (const p of s.parts) {
+      if (!geos.has(p.shape)) geos.set(p.shape, partGeometry(p.shape));
+      const m = new Mesh(geos.get(p.shape), material(p.material, p.color));
+      m.position.set(p.x, p.y, p.z);
+      m.scale.set(p.sx, p.sy, p.sz);
+      m.rotation.set(rad(p.rx), rad(p.ry), rad(p.rz));
+      inner.add(m);
+    }
+    // Enquadra pelo bounding box: centraliza e escala para a esfera que contém o conjunto ter raio 1
+    // (a câmera já conta com um objeto de raio ~1,3). Girar/flutuar atua no grupo externo, em torno do centro.
+    const box = new Box3().setFromObject(inner);
+    const c = box.getCenter(new Vector3());
+    const k = 1 / Math.max(box.getSize(new Vector3()).length() / 2, 1e-3);
+    inner.scale.setScalar(k);
+    inner.position.copy(c).multiplyScalar(-k);
+    obj.add(inner);
+  } else if (s.shape === 'cartoes') {
     // Três cartões em leque: o da frente na cor principal, os de trás na segunda (o do meio um pouco mais escuro).
     const geo = cardGeometry();
     const mid = '#' + new Color(s.color2).multiplyScalar(0.7).getHexString();
@@ -125,14 +173,14 @@ function build(s: Scene3D) {
       [s.color, 0, 0.2, 0, 0],
     ];
     for (const [c, rz, x, y, z] of specs) {
-      const m = new Mesh(geo, material(s, c));
+      const m = new Mesh(geo, material(s.material, c));
       m.rotation.z = rz;
       m.position.set(x, y, z);
       m.scale.setScalar(1.1);
       obj.add(m);
     }
   } else {
-    const m = new Mesh(geometry(s.shape), material(s, s.color));
+    const m = new Mesh(geometry(s.shape), material(s.material, s.color));
     if (s.shape === 'icosaedro' && m.material instanceof MeshStandardMaterial) m.material.flatShading = true;
     obj.add(m);
   }
@@ -155,7 +203,7 @@ function frame(b: Built, camera: PerspectiveCamera, s: Scene3D, w: number, h: nu
   camera.aspect = w / h;
   // Distância que faz a esfera que contém o objeto caber na menor dimensão; o zoom aproxima a partir daí.
   const half = Math.atan(Math.tan(rad(camera.fov) / 2) * Math.min(1, camera.aspect));
-  camera.position.set(0, 0, (s.shape === 'cartoes' ? 1.4 : 1.3) / Math.sin(half) / s.zoom);
+  camera.position.set(0, 0, (s.parts?.length ? 1.15 : s.shape === 'cartoes' ? 1.4 : 1.3) / Math.sin(half) / s.zoom);
   camera.updateProjectionMatrix();
   b.obj.rotation.set(rad(s.rotX), rad(s.rotY) + spin, rad(s.rotZ));
   b.obj.position.y = s.float ? Math.sin(floatT * 1.6) * 0.07 : 0;

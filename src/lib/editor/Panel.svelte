@@ -291,7 +291,8 @@
           <h3 id="cena-titulo">{t('Objeto 3D')}</h3>
           <label class="row">
             <span>{t('Forma')}</span>
-            <select class="field" value={scene.shape} onchange={(e) => setScene({ shape: val(e) })}>
+            <select class="field" value={scene.parts?.length ? 'pecas' : scene.shape} onchange={(e) => setScene({ shape: val(e), parts: [] })}>
+              {#if scene.parts?.length}<option value="pecas">{t('Montado por peças ({n})', { n: scene.parts.length })}</option>{/if}
               {#each SHAPES_3D as v (v)}<option value={v}>{t(L_SHAPE[v])}</option>{/each}
             </select>
           </label>

@@ -53,6 +53,33 @@ export type Scene3D = {
   zoom: number;
   /** Inclina um pouco seguindo o ponteiro sobre o elemento. */
   pointer: boolean;
+  /**
+   * Objeto montado por peças (um bolo, uma xícara, uma bicicleta). Com peças, `shape` é ignorada e cada peça
+   * usa a própria cor e material; luz, giro, flutuar, aproximação e ponteiro continuam valendo para o conjunto.
+   */
+  parts?: Part3D[];
+};
+
+export const PART_SHAPES = ['caixa', 'esfera', 'cilindro', 'cone', 'toro', 'capsula', 'semiesfera'] as const;
+export const MAX_PARTS = 40;
+/**
+ * Uma peça: forma básica de tamanho 1 (caixa 1x1x1, esfera e cilindro de diâmetro 1, toro de diâmetro 1 com
+ * tubo fino), centrada em (x, y, z) e esticada por (sx, sy, sz). O conjunto cabe em -1..1, y para cima.
+ */
+export type Part3D = {
+  shape: (typeof PART_SHAPES)[number];
+  x: number;
+  y: number;
+  z: number;
+  sx: number;
+  sy: number;
+  sz: number;
+  /** Rotação em graus. */
+  rx: number;
+  ry: number;
+  rz: number;
+  color: string;
+  material: (typeof MATERIALS_3D)[number];
 };
 
 export const DEFAULT_SCENE: Scene3D = {
@@ -292,7 +319,32 @@ export function cleanScene(raw: unknown, base: Scene3D = DEFAULT_SCENE): Scene3D
     float: bool(r.float, base.float),
     zoom: num(r.zoom, 0.5, 2) ?? base.zoom,
     pointer: bool(r.pointer, base.pointer),
+    ...partsOf(r.parts, base.parts),
   };
+}
+
+/** Peças válidas de `raw`; sem lista em `raw`, ficam as de `base`. Lista vazia tira as peças. */
+function partsOf(raw: unknown, base: Part3D[] | undefined): { parts?: Part3D[] } {
+  const list = Array.isArray(raw) ? raw : base;
+  if (!list?.length) return {};
+  const parts = list
+    .slice(0, MAX_PARTS)
+    .filter((p): p is Record<string, unknown> => !!p && typeof p === 'object')
+    .map((p) => ({
+      shape: pick(PART_SHAPES, p.shape) ?? 'caixa',
+      x: num(p.x, -2, 2) ?? 0,
+      y: num(p.y, -2, 2) ?? 0,
+      z: num(p.z, -2, 2) ?? 0,
+      sx: num(p.sx, 0.01, 4) ?? 0.5,
+      sy: num(p.sy, 0.01, 4) ?? 0.5,
+      sz: num(p.sz, 0.01, 4) ?? 0.5,
+      rx: num(p.rx, -360, 360) ?? 0,
+      ry: num(p.ry, -360, 360) ?? 0,
+      rz: num(p.rz, -360, 360) ?? 0,
+      color: typeof p.color === 'string' && HEX.test(p.color) ? p.color : '#cccccc',
+      material: pick(MATERIALS_3D, p.material) ?? 'fosco',
+    }));
+  return parts.length ? { parts } : {};
 }
 const NUMERIC = ['x', 'y', 'w', 'h', 'fontSize', 'fontWeight', 'lineHeight', 'padding', 'radius', 'borderWidth', 'opacity'] as const;
 

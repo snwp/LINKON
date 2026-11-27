@@ -3,7 +3,7 @@
 //! (`claude auth login`). Cada pedido roda `claude -p` sem ferramentas, numa pasta vazia, e o stdout em
 //! stream-json é repassado linha a linha para a interface pelo evento `ai-event`.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -12,6 +12,34 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 
 const MAX_PROMPT_BYTES: usize = 512 * 1024;
+/// Imagens de referência (ver refs.rs) que vão junto do pedido: poucas e pequenas.
+const MAX_IMAGES: usize = 3;
+const MAX_IMAGE_B64: usize = 2_100_000;
+
+#[derive(Deserialize)]
+pub struct AiImage {
+    media_type: String,
+    data: String,
+}
+
+/// A mensagem do pedido em stream-json: as imagens primeiro, depois o texto. Recusa tipo ou dado fora do esperado.
+fn image_message(prompt: &str, images: &[AiImage]) -> Result<String, String> {
+    if images.len() > MAX_IMAGES {
+        return Err("Imagens de referência demais.".into());
+    }
+    let mut content = Vec::new();
+    for img in images {
+        let ok_type = matches!(img.media_type.as_str(), "image/jpeg" | "image/png" | "image/gif" | "image/webp");
+        let ok_data = img.data.len() <= MAX_IMAGE_B64 && img.data.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'='));
+        if !ok_type || !ok_data {
+            return Err("Imagem de referência inválida.".into());
+        }
+        content.push(serde_json::json!({ "type": "image", "source": { "type": "base64", "media_type": img.media_type, "data": img.data } }));
+    }
+    content.push(serde_json::json!({ "type": "text", "text": prompt }));
+    let msg = serde_json::json!({ "type": "user", "message": { "role": "user", "content": content } });
+    Ok(format!("{msg}\n"))
+}
 /// Modelos que o app pode pedir ao Claude Code (nomes completos; os apelidos antigos seguem valendo).
 const MODELS: &[&str] = &[
     "",
@@ -115,6 +143,7 @@ pub fn ai_run(
     prompt: String,
     system_prompt: String,
     model: String,
+    images: Option<Vec<AiImage>>,
 ) -> Result<(), String> {
     if run_id.is_empty() || run_id.len() > 32 || !run_id.chars().all(|c| c.is_ascii_alphanumeric()) {
         return Err("Pedido inválido.".into());
@@ -131,6 +160,10 @@ pub fn ai_run(
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let system_file = dir.join(format!("system-{run_id}.md"));
     std::fs::write(&system_file, &system_prompt).map_err(|e| e.to_string())?;
+
+    // Com imagens, o pedido vai como mensagem stream-json (texto puro não leva imagem).
+    let images = images.unwrap_or_default();
+    let input = if images.is_empty() { prompt } else { image_message(&prompt, &images)? };
 
     let (bin, _) = find_claude()?;
     let mut cmd = command(&bin);
@@ -154,6 +187,9 @@ pub fn ai_run(
     if !model.is_empty() {
         cmd.args(["--model", &model]);
     }
+    if !images.is_empty() {
+        cmd.args(["--input-format", "stream-json"]);
+    }
     cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
 
     let mut child = cmd.spawn().map_err(|e| format!("Não foi possível iniciar o Claude Code ({e})."))?;
@@ -164,7 +200,7 @@ pub fn ai_run(
 
     // O pedido vai pela entrada padrão para não esbarrar no limite de tamanho da linha de comando.
     std::thread::spawn(move || {
-        let _ = stdin.write_all(prompt.as_bytes());
+        let _ = stdin.write_all(input.as_bytes());
     });
 
     std::thread::spawn(move || {
@@ -210,4 +246,22 @@ pub fn ai_cancel(app: AppHandle, run_id: String) -> Result<(), String> {
         let _ = child.kill();
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod image_tests {
+    use super::*;
+
+    #[test]
+    fn image_message_checks_type_and_data() {
+        let ok = AiImage { media_type: "image/png".into(), data: "iVBORw0KGgo=".into() };
+        let line = image_message("oi", &[ok]).unwrap();
+        let v: serde_json::Value = serde_json::from_str(line.trim()).unwrap();
+        assert_eq!(v["message"]["content"][0]["type"], "image");
+        assert_eq!(v["message"]["content"][1]["text"], "oi");
+        let svg = AiImage { media_type: "image/svg+xml".into(), data: "PHN2Zz4=".into() };
+        assert!(image_message("x", &[svg]).is_err());
+        let bad = AiImage { media_type: "image/png".into(), data: "a\"}b".into() };
+        assert!(image_message("x", &[bad]).is_err());
+    }
 }

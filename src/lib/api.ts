@@ -133,10 +133,14 @@ type Api = {
 
   /** Bases de componentes do Linke: sites de referência salvos pela URL, com o resumo buscado ao salvar. */
   listBases(): Promise<ComponentBase[]>;
+  /** Fotos de referência para o Linke (Openverse); vazia quando não acha. Só no app desktop. */
+  findReferences(query: string): Promise<RefImage[]>;
   /** Busca a página, resume e guarda (ou atualiza, se a URL já existe). */
   addBase(url: string): Promise<ComponentBase>;
   deleteBase(id: number): Promise<void>;
 };
+
+export type RefImage = { media_type: string; data: string; title: string };
 
 export type ComponentBase = { id: number; url: string; title: string; summary: string; created_at: number };
 
@@ -161,6 +165,8 @@ export type AiRequest = {
   systemPrompt: string;
   /** Apelido aceito pelo Claude Code ("opus", "sonnet", "haiku") ou vazio para o padrão dele. */
   model: string;
+  /** Fotos de referência que vão junto do pedido (até 3). */
+  images?: { media_type: string; data: string }[];
 };
 
 type AiEvent = { runId: string; line?: string; done?: boolean; error?: string };
@@ -234,7 +240,7 @@ const tauriApi: Api = {
       if (e.payload.done) finish(e.payload.error);
     });
     try {
-      await invoke('ai_run', { ...req });
+      await invoke('ai_run', { ...req, images: req.images ?? null });
       const err = await ended;
       if (err) throw err;
     } finally {
@@ -260,6 +266,7 @@ const tauriApi: Api = {
   listBases: () => invoke('list_bases'),
   addBase: (url) => invoke('add_base', { url }),
   deleteBase: (id) => invoke('delete_base', { id }),
+  findReferences: (query) => invoke('find_references', { query }),
 };
 
 const KINDS: Record<string, FileKind> = {};
@@ -545,6 +552,9 @@ function memoryApi(): Api {
       throw tr('Buscar um site de componentes só funciona no app desktop.');
     },
     async deleteBase() {},
+    async findReferences() {
+      return [];
+    },
   };
 }
 

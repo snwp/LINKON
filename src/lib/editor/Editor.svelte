@@ -7,7 +7,7 @@
   import { ArrowLeft, Undo2, Redo2, Minus, Plus, Eye, Monitor, Smartphone, Trash2, PanelLeftOpen, PanelRightOpen, PanelLeft, PanelRight, SquarePlus, Pencil } from '@lucide/svelte';
   import { openMenu } from '$lib/menu.svelte';
   import { toMobile } from './layouts';
-  import { api, message, type Page } from '$lib/api';
+  import { api, message, type Page, type RefImage } from '$lib/api';
   import { store, reload, notify } from '$lib/store.svelte';
   import { background, aiLogs, getAiNotify } from './background.svelte';
   import { registerFlush } from '$lib/pending';
@@ -763,12 +763,16 @@
     }
   }
 
-  async function askAi(request: string, markedId: string | null = null, point: { x: number; y: number } | null = null) {
+  /**
+   * `refs`: fotos de referência desta rodada. null na primeira; se o Linke pedir referências (op `refs`), o app
+   * busca as fotos e chama de novo com elas (lista vazia = buscou e não achou, para não pedir outra vez).
+   */
+  async function askAi(request: string, markedId: string | null = null, point: { x: number; y: number } | null = null, refs: RefImage[] | null = null) {
     if (aiRun) return;
     bubble = null;
     commit();
     const marked = markedId ? doc.elements.find((e) => e.id === markedId) ?? null : null;
-    aiLog.push({ kind: 'user', text: request, scope: marked ? marked.name : point ? `x ${Math.round(point.x)}, y ${Math.round(point.y)}` : undefined });
+    if (!refs) aiLog.push({ kind: 'user', text: request, scope: marked ? marked.name : point ? `x ${Math.round(point.x)}, y ${Math.round(point.y)}` : undefined });
 
     const images = store.files.filter((f) => f.kind === 'imagem');
     const others = store.files.filter((f) => f.kind !== 'imagem');
@@ -793,6 +797,7 @@
       recent: recentRequests,
       // Sem as bases (falha ao ler o banco), o pedido segue sem referência.
       bases: (await api.listBases().catch(() => [])).map((b) => ({ url: b.url, summary: b.summary })),
+      references: refs?.map((r) => r.title),
     });
 
     const runId = Math.random().toString(36).slice(2, 10);
@@ -807,10 +812,15 @@
     let applied = 0;
     let said = 0;
     let failure = '';
+    let refsQuery = '';
 
     const handleLine = (line: string) => {
       const op = parseOp(line, ctx);
       if (!op) return;
+      if (op.op === 'refs') {
+        if (!refs) refsQuery = op.query;
+        return;
+      }
       if (op.op === 'say') {
         said++;
         aiLog.push({ kind: 'ai', text: op.text });
@@ -836,7 +846,8 @@
     };
 
     try {
-      await api.aiRun({ runId, prompt, systemPrompt: SYSTEM_PROMPT, model }, (raw) => {
+      const images = refs?.map(({ media_type, data }) => ({ media_type, data }));
+      await api.aiRun({ runId, prompt, systemPrompt: SYSTEM_PROMPT, model, images }, (raw) => {
         const r = readStreamLine(raw);
         if (r.text) {
           sawText = true;
@@ -854,7 +865,9 @@
     }
     if (buffer.trim()) handleLine(buffer);
     if (failure) aiLog.push({ kind: 'error', text: friendlyAiError(failure) });
-    else if (applied === 0 && said === 0) aiLog.push({ kind: 'ai', text: t('Nada foi alterado.') });
+    // Rodada que só pediu referências: segue para a busca (no fim desta função) em vez de dizer que nada mudou.
+    const wantsRefs = !!refsQuery && !failure && !detached;
+    if (!failure && !wantsRefs && applied === 0 && said === 0) aiLog.push({ kind: 'ai', text: t('Nada foi alterado.') });
     // Entra na tela "Uso da IA" (pedidos sem resposta contam como pedido, sem tokens).
     // (o TypeScript não vê que o callback acima preenche `usage`)
     const u = usage as AiUsage | null;
@@ -869,7 +882,7 @@
     aiRun = null;
     // Depois do pedido, os elementos já assentaram; desfazer/refazer não deve reanimar nada.
     setTimeout(() => aiEntering.clear(), 400);
-    recentRequests = [...recentRequests, request].slice(-5);
+    if (!wantsRefs) recentRequests = [...recentRequests, request].slice(-5);
     // Tudo o que o assistente fez num pedido vira um único passo de desfazer.
     if (applied) commit();
     if (detached) {
@@ -884,6 +897,11 @@
       }
     }
     finished();
+    if (wantsRefs) {
+      aiLog.push({ kind: 'action', text: t('Buscando fotos de referência de “{query}”', { query: refsQuery }) });
+      const found = await api.findReferences(refsQuery).catch(() => [] as RefImage[]);
+      await askAi(request, markedId, point, found);
+    }
   }
 
   function cancelAi() {

@@ -80,7 +80,7 @@ fn private_ip(ip: std::net::IpAddr) -> bool {
 }
 
 /// Resolve o nome e recusa endereços locais. Cada redirecionamento também passa por aqui.
-fn public_resolver(addr: &str) -> std::io::Result<Vec<std::net::SocketAddr>> {
+pub(crate) fn public_resolver(addr: &str) -> std::io::Result<Vec<std::net::SocketAddr>> {
     use std::net::ToSocketAddrs;
     let ok: Vec<_> = addr.to_socket_addrs()?.filter(|a| !private_ip(a.ip())).collect();
     if ok.is_empty() {

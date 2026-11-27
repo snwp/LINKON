@@ -364,6 +364,7 @@ export const es: Record<string, string> = {
   "Volta (s)": "Ciclo (s)",
   "Profundidade na rolagem": "Profundidad al desplazar",
   "Objeto 3D": "Objeto 3D",
+  "Montado por peças ({n})": "Montado por piezas ({n})",
   "Forma": "Forma",
   "Material": "Material",
   "Cor": "Color",
@@ -428,4 +429,5 @@ export const es: Record<string, string> = {
   "Painel do Linke": "Panel de Linke",
   "Esconder o painel": "Ocultar el panel",
   "Esconder Linke": "Ocultar Linke",
+  "Buscando fotos de referência de “{query}”": "Buscando fotos de referencia de “{query}”",
 };
