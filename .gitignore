@@ -11,3 +11,17 @@ vite.config.ts.timestamp-*
 
 # cache local de ferramentas
 .impeccable/
+
+# configuração local e dados que não devem ir para o repositório
+.claude/
+.idea/
+*.local
+*.log
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.pem
+*.key
+*.pfx
+*.p12

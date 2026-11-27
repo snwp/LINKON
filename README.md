@@ -1,6 +1,6 @@
 # Linkon
 
-Aplicativo desktop de organização criativa, construído a partir do briefing `../linkon_funcionamento_geral.txt` (etapas 1 a 5) e do guia `../guia_visual_linkon.pdf`. A interface é só preto e branco (tokens em `src/app.css`). O logotipo usa a fonte Science Gothic (licença OFL, em `static/fonts/`). O ícone sai de `app-icon.svg` (Linke, o mascote: um círculo com dois olhos vazados): para regenerar, rode `npx tauri icon app-icon.svg`, apague `src-tauri/icons/android` e `ios` e copie `32x32.png` para `static/favicon.png`.
+Aplicativo desktop de organização criativa. A interface é só preto e branco (tokens em `src/app.css`). O logotipo usa a fonte Science Gothic (licença OFL, em `static/fonts/`). O ícone sai de `app-icon.svg` (Linke, o mascote: um círculo com dois olhos vazados): para regenerar, rode `npx tauri icon app-icon.svg`, apague `src-tauri/icons/android` e `ios` e copie `32x32.png` para `static/favicon.png`.
 
 Tecnologias: Tauri 2, Rust, Svelte 5 com TypeScript e SQLite (via `rusqlite`, modo WAL).
 
@@ -28,8 +28,6 @@ Configurações mostra se o Claude Code foi encontrado e se a conta está conect
 
 O Linkon não oferece "entrar com a conta do Claude" dentro dele porque a Anthropic não permite isso em apps de terceiros. Ele usa o Claude Code que você mesmo instalou e conectou.
 
-A Etapa 6 do briefing (sincronização, colaboração, IA, publicação online, mobile) não foi implementada, como o próprio briefing pede.
-
 ## Rodar
 
 ```powershell
@@ -53,7 +51,7 @@ cargo test
 npm run check
 ```
 
-Os testes do backend ficam nos módulos de `src-tauri/src/` (banco, biblioteca, páginas, exportação, cópia de segurança) e rodam pelo binário `tests/db.rs`. O binário de teste que inclui o Tauri não abre com o toolchain GNU/mingw desta máquina. Pelo mesmo motivo a crate gera só `rlib`; volte a `["staticlib", "cdylib", "rlib"]` se for fazer a versão mobile.
+Os testes do backend ficam nos módulos de `src-tauri/src/` (banco, biblioteca, páginas, exportação, cópia de segurança) e rodam pelo binário `tests/db.rs`. O binário de teste que inclui o Tauri não abre com o toolchain GNU/mingw no Windows. Pelo mesmo motivo a crate gera só `rlib`; volte a `["staticlib", "cdylib", "rlib"]` se for fazer a versão mobile.
 
 ## Onde ficam os dados
 
@@ -100,3 +98,7 @@ No editor, aba Inserir, bloco Gerar imagem: a descrição vira uma imagem guarda
 - **Documentos\Linkon:** cada interface vira um site em `Documentos\Linkon\<pasta>\<interface>\` (`index.html`, `assets/`, `fit.js`, `vercel.json`), gravado depois de cada salvamento (`src-tauri/src/site.rs`). Renomear move a pasta. Pastas sem o arquivo `.linkon` não são do Linkon e nunca são sobrescritas. Apagar uma interface não apaga a pasta do site.
 - **Ver no navegador:** servidor local só em 127.0.0.1, só a pasta Documentos\Linkon, recusando outro Host (DNS rebinding) e caminhos com `..` (`serve.rs`).
 - **Publicar:** revisão de segurança do HTML (scripts, atributos `on…`, `javascript:`, iframe, form) e confirmação sempre; depois `vercel deploy --prod --yes` pela CLI logada do usuário (`npm i -g vercel`, `vercel login`). Cada interface é o projeto `linkon-<pasta>-<interface>`. O `vercel.json` manda CSP fechada (nada de fora, sem script embutido), HSTS, nosniff e bloqueio de iframe. Os sites são estáticos: não há formulário nem backend.
+
+## Licença
+
+MIT. Veja `LICENSE`.

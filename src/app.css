@@ -1,6 +1,5 @@
-/* Linkon: só preto, branco e cinzas neutros (pedido do usuário em 2026-11-24).
-   Sem cor de destaque: estados ativos e seleção se distinguem por forma (borda, fundo, inversão), não por matiz.
-   Tipografia continua a do guia_visual_linkon.pdf. */
+/* Linkon: só preto, branco e cinzas neutros.
+   Sem cor de destaque: estados ativos e seleção se distinguem por forma (borda, fundo, inversão), não por matiz. */
 /* Logotipo: Science Gothic (Google Fonts, licença OFL), embutida para funcionar sem internet. Só a parte latina. */
 @font-face {
   font-family: 'Science Gothic';
