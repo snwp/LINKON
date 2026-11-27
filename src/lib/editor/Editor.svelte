@@ -341,6 +341,12 @@
   }
 
   function onpointermove(e: PointerEvent) {
+    if (frameSize) {
+      const { d, edge, startX, startY, w, h } = frameSize;
+      if (edge !== 's') d.width = Math.min(4000, Math.max(200, Math.round(w + (e.clientX - startX) / zoom)));
+      if (edge !== 'e') d.height = Math.min(20000, Math.max(200, Math.round(h + (e.clientY - startY) / zoom)));
+      return;
+    }
     if (frameDrag) {
       const dx = (e.clientX - frameDrag.startX) / zoom;
       const dy = (e.clientY - frameDrag.startY) / zoom;
@@ -374,6 +380,11 @@
   }
 
   function onpointerup() {
+    if (frameSize) {
+      frameSize = null;
+      commit();
+      return;
+    }
     if (frameDrag) {
       if (frameDrag.moved) commit();
       frameDrag = null;
@@ -670,6 +681,16 @@
   /** Arrastar o nome de um quadro extra move o quadro. */
   /** Arrastar um quadro (pelo nome ou pelo corpo, se não está em edição). O principal guarda a posição em `root.x/y`. */
   let frameDrag: { f: { x?: number; y?: number }; startX: number; startY: number; x: number; y: number; moved: boolean } | null = null;
+
+  /** Arrastar a borda direita, a de baixo ou o canto do quadro ativo muda a largura e a altura dele. */
+  let frameSize = $state<{ d: Doc; edge: 'e' | 's' | 'se'; startX: number; startY: number; w: number; h: number } | null>(null);
+
+  function startFrameSize(e: PointerEvent, d: Doc, edge: 'e' | 's' | 'se') {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    commit();
+    frameSize = { d, edge, startX: e.clientX, startY: e.clientY, w: d.width, h: d.height };
+  }
 
   function startFrameDrag(e: PointerEvent, f: Slot) {
     if (e.button !== 0) return;
@@ -1066,6 +1087,17 @@
               {#if selected && !selected.hidden && !moving}
                 <SelectionBar el={selected} {zoom} {commit} {duplicate} remove={removeSelected} frames={view === 'mobile' ? [] : slots.map((x) => ({ id: x.id, name: x.name }))} />
               {/if}
+              {#if !aiRun}
+                {#each ['e', 's', 'se'] as const as edge (edge)}
+                  <div
+                    class={`frame-grip ${edge}`}
+                    onpointerdown={(e) => startFrameSize(e, f.d, edge)}
+                    role="presentation"
+                    data-tip={frameSize ? undefined : t('Arraste para mudar o tamanho do quadro')}
+                  ></div>
+                {/each}
+                {#if frameSize}<span class="frame-size mono">{f.d.width} × {f.d.height}</span>{/if}
+              {/if}
             {:else}
               <!-- Quadro que não está em edição: só desenho. Um clique passa a editá-lo. -->
               <div
@@ -1362,6 +1394,34 @@
     overflow: hidden;
     text-overflow: ellipsis;
     cursor: grab;
+  }
+
+  /* Faixas de 10 px fora da borda do quadro ativo: direita, baixo e o canto. */
+  .frame-grip {
+    position: absolute;
+    z-index: 3;
+  }
+
+  .frame-grip.e { left: 100%; top: 0; width: 10px; height: 100%; cursor: ew-resize; }
+  .frame-grip.s { left: 0; top: 100%; width: 100%; height: 10px; cursor: ns-resize; }
+  .frame-grip.se { left: 100%; top: 100%; width: 14px; height: 14px; cursor: nwse-resize; }
+
+  .frame-grip:hover,
+  .frame-grip:active {
+    background: color-mix(in srgb, var(--fg) 25%, transparent);
+  }
+
+  .frame-size {
+    position: absolute;
+    left: 100%;
+    top: 100%;
+    margin: 18px 0 0 8px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--fg);
+    color: var(--bg);
+    font-size: 12px;
+    white-space: nowrap;
   }
 
   .slot-frame.active > .frame-name {

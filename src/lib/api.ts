@@ -1,7 +1,7 @@
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
-import { openPath } from '@tauri-apps/plugin-opener';
+import { openPath, openUrl } from '@tauri-apps/plugin-opener';
 import { t as tr } from './i18n.svelte';
 
 /** Extensões que o Windows executa ao abrir. */
@@ -121,6 +121,8 @@ type Api = {
   /** Publica na Vercel (produção). Devolve o endereço do site. */
   publishSite(pageId: number): Promise<string>;
   openPublished(url: string): Promise<void>;
+  /** Link de um site na visualização: abre no navegador do sistema (só http, https, mailto e tel; ver capabilities). */
+  openLink(url: string): Promise<void>;
   vercelStatus(): Promise<VercelStatus>;
 
   /** Gera uma imagem e a guarda na biblioteca (já na pasta, se houver). Rejeita com "cancelado" ao parar. */
@@ -256,6 +258,7 @@ const tauriApi: Api = {
   preparePublish: (pageId, html, pages) => invoke('prepare_publish', { pageId, html, pages }),
   publishSite: (pageId) => invoke('publish_site', { pageId }),
   openPublished: (url) => invoke('open_published', { url }),
+  openLink: (url) => openUrl(url),
   vercelStatus: () => invoke('vercel_status'),
 
   generateImage: (req) => invoke('generate_image', { ...req }),
@@ -530,6 +533,9 @@ function memoryApi(): Api {
       throw tr('Publicar só funciona no app desktop.');
     },
     async openPublished() {},
+    async openLink(url) {
+      window.open(url, '_blank', 'noopener');
+    },
     async vercelStatus() {
       return { installed: false, user: '' };
     },

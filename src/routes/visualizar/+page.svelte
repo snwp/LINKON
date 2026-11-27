@@ -6,7 +6,7 @@
   import { api, message, type PublishCheck } from '$lib/api';
   import { siteHtml, sitePages } from '$lib/site';
   import { store, notify } from '$lib/store.svelte';
-  import { parseDoc } from '$lib/editor/doc';
+  import { parseDoc, frameDoc, frameFiles, MAIN_FRAME } from '$lib/editor/doc';
   import { renderHtml } from '$lib/editor/render';
   import { refInfo } from '$lib/editor/refs';
   import { fontCss } from '$lib/editor/fonts';
@@ -16,8 +16,16 @@
   let current = $derived(store.pages.find((p) => p.id === pageId) ?? null);
   let doc = $derived(current ? parseDoc(current.doc) : null);
   let view = $state<'desktop' | 'mobile'>(page.url.searchParams.get('v') === 'mobile' ? 'mobile' : 'desktop');
+  /** Quadro mostrado no desktop: os botões que levam a outro quadro trocam este valor, como no site publicado. */
+  let shown = $state(MAIN_FRAME);
+  let files = $derived(doc ? frameFiles(doc) : new Map<string, string>());
   /** Versão mostrada aqui. A exportação leva as duas. */
-  let frame = $derived(doc && view === 'mobile' && doc.mobile ? doc.mobile : doc ? { ...doc, mobile: undefined } : null);
+  let frame = $derived.by(() => {
+    if (!doc) return null;
+    if (view === 'mobile' && doc.mobile) return doc.mobile;
+    const d = frameDoc(doc, shown) ?? doc;
+    return { ...d, mobile: undefined, frames: undefined };
+  });
 
   let mode = $state<'ajustar' | 'real'>('ajustar');
   let backdrop = $state<'escuro' | 'claro'>('escuro');
@@ -43,6 +51,7 @@
           ref: refInfo,
           fitScript: false,
           fontCss: fonts,
+          frames: files,
         })
       : '',
   );
@@ -63,8 +72,21 @@
     stopMotion?.();
     stopMotion = undefined;
     if (!d) return;
+    // Cliques nos links funcionam como no site: outro quadro troca a tela aqui, link externo abre no navegador.
+    d.addEventListener('click', follow);
     const { start } = await import('$lib/runtime');
     stopMotion = start(d);
+  }
+
+  function follow(e: MouseEvent) {
+    const a = (e.target as Element | null)?.closest?.('a[href]');
+    if (!a) return;
+    e.preventDefault();
+    const href = a.getAttribute('href') ?? '';
+    if (href === 'index.html') return void (shown = MAIN_FRAME);
+    const id = [...files].find(([, file]) => file === href)?.[0];
+    if (id) return void (shown = id);
+    if (/^(https?:|mailto:|tel:)/i.test(href)) api.openLink(href).catch((err) => (store.error = message(err)));
   }
   onDestroy(() => stopMotion?.());
 
@@ -183,7 +205,7 @@
 
     <!-- Sem allow-scripts: nada da página roda como código. A mesma origem serve para fontes e imagens carregarem e para o app animar o documento por fora (wake). -->
     <div class="viewport" class:light={backdrop === 'claro'} bind:this={viewport}>
-      {#key view}
+      {#key `${view}:${shown}`}
         <div class="frame-box" in:frameIn style={`width:${frame.width * scale}px;height:${frame.height * scale}px`}>
           <iframe
             title={t('Visualização de {title}', { title: current.title })}
