@@ -4,9 +4,9 @@ import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialo
 import { openPath, openUrl } from '@tauri-apps/plugin-opener';
 import { t as tr } from './i18n.svelte';
 
-/** Extensões que o Windows executa ao abrir. */
-export const BLOCKED_TO_OPEN =
-  /\.(exe|com|bat|cmd|scr|pif|msi|msp|msc|ps1|psm1|psd1|vbs|vbe|js|jse|wsf|wsh|hta|lnk|url|cpl|reg|jar|appref-ms|application|gadget|inf|scf|dll|sys|ocx|chm|iso|img|vhd|vhdx)$/i;
+/** Só estes formatos abrem no app padrão. Uma lista de bloqueio sempre deixa passar algum formato ativo (.docm, .xll, .library-ms…). */
+export const ALLOWED_TO_OPEN =
+  /\.(png|jpe?g|gif|webp|svg|bmp|avif|ico|pdf|docx?|odt|rtf|xlsx?|ods|pptx?|odp|epub|txt|md|markdown|csv|tsv|json|xml|html?|css|log|ya?ml|toml|ini|srt|mp4|mov|webm|mkv|avi|mp3|wav|ogg|m4a|flac)$/i;
 
 export type Page = {
   id: number;
@@ -206,11 +206,11 @@ const tauriApi: Api = {
     invoke('set_file_link', { fileId, target, targetId, linked }),
   textPreview: (id) => invoke('text_preview', { id }),
   fileUrl: (f) => convertFileSrc(f.path),
-  // Programas, scripts e atalhos não abrem pelo Linkon: um backup de terceiros pode trazer um .exe com nome de foto.
+  // Um backup de terceiros pode trazer um .exe com nome de foto: só formatos da lista abrem.
   // A extensão conferida é a do arquivo no disco, não o nome mostrado.
   openFile: (f) =>
-    !f.path || BLOCKED_TO_OPEN.test(f.path)
-      ? Promise.reject(tr('Por segurança, o Linkon não abre programas, scripts nem atalhos.'))
+    !f.path || !ALLOWED_TO_OPEN.test(f.path)
+      ? Promise.reject(tr('Por segurança, o Linkon só abre imagens, PDFs, documentos, textos, áudios e vídeos.'))
       : openPath(f.path),
 
   linkIdeas: (a, b, linked) => invoke('link_ideas', { a, b, linked }),

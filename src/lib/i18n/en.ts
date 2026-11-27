@@ -252,7 +252,7 @@ export const en: Record<string, string> = {
   "Ponto na página · x {x}, y {y}": "Point on the page · x {x}, y {y}",
   "Por modelo nesta semana": "By model this week",
   "Por nome": "By name",
-  "Por segurança, o Linkon não abre programas, scripts nem atalhos.": "For security, Linkon doesn't open programs, scripts or shortcuts.",
+  "Por segurança, o Linkon só abre imagens, PDFs, documentos, textos, áudios e vídeos.": "For security, Linkon only opens images, PDFs, documents, text, audio and video.",
   "Portfólio": "Portfolio",
   "Preencher": "Fill",
   "Principal": "Main",

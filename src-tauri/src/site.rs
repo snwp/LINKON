@@ -72,6 +72,11 @@ fn err(e: impl std::fmt::Display) -> String {
     format!("Não foi possível gravar o site ({e}).")
 }
 
+/// `rel` vem do banco, que pode vir de um backup: só segmentos `a-z0-9-`, sem `..` nem separadores.
+pub fn valid_rel(rel: &str) -> bool {
+    !rel.is_empty() && rel.split('/').all(|s| !s.is_empty() && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-'))
+}
+
 fn join_rel(root: &Path, rel: &str) -> PathBuf {
     rel.split('/').fold(root.to_path_buf(), |p, s| p.join(s))
 }
@@ -95,7 +100,8 @@ fn site_dir(conn: &Connection, root: &Path, page_id: i64) -> Result<(String, Pat
     let old: Option<String> = conn
         .query_row("SELECT rel FROM site_dirs WHERE page_id = ?1", [page_id], |r| r.get(0))
         .optional()
-        .map_err(err)?;
+        .map_err(err)?
+        .filter(|o: &String| valid_rel(o));
     let taken = |rel: &str| -> Result<bool, String> {
         let other = conn
             .query_row("SELECT 1 FROM site_dirs WHERE rel = ?1 AND page_id <> ?2", params![rel, page_id], |_| Ok(()))
@@ -202,6 +208,12 @@ fn localize(conn: &Connection, library: &Path, assets: &Path, html: &str, used: 
         let file = after[..digits].parse().ok().and_then(|id| get_file(conn, library, id).ok());
         let name = file.as_ref().and_then(|f| {
             let src = PathBuf::from(&f.path);
+            // Só imagem vai para o site: um .html ou .js da biblioteca (vindo de backup) rodaria na origem publicada.
+            // A extensão é a do arquivo no disco, não o `kind` do banco.
+            let ext = src.extension()?.to_str()?.to_lowercase();
+            if crate::library::kind_of(&ext) != "imagem" {
+                return None;
+            }
             let name = src.file_name()?.to_str()?.to_string();
             let dest = assets.join(&name);
             let same = dest.metadata().ok().map(|m| m.len()) == src.metadata().ok().map(|m| m.len());
@@ -344,6 +356,16 @@ mod tests {
     }
 
     #[test]
+    fn rel_from_db_stays_inside() {
+        assert!(valid_rel("cafe-aurora/landing-12"));
+        assert!(!valid_rel("../../x"));
+        assert!(!valid_rel("a//b"));
+        assert!(!valid_rel(r"a\b"));
+        assert!(!valid_rel("C:/x"));
+        assert!(!valid_rel(""));
+    }
+
+    #[test]
     fn slugs_are_url_and_vercel_safe() {
         assert_eq!(slug("Café Aurora — Landing"), "cafe-aurora-landing");
         assert_eq!(slug("  ../../Windows  "), "windows");
@@ -363,12 +385,16 @@ mod tests {
         let pid: i64 = c.last_insert_rowid();
         c.execute("INSERT INTO pages (title, project_id, doc, created_at, updated_at) VALUES ('Início', ?1, '{}', 0, 0)", [pid]).unwrap();
         let page: i64 = c.last_insert_rowid();
+        // Um .js da biblioteca não pode ir para assets/ (rodaria na origem publicada).
+        let js = lib.join("x.js");
+        fs::write(&js, b"alert(1)").unwrap();
+        let js = insert_file(&c, &lib, &copy_into(&lib, &js).unwrap(), None, None).unwrap();
 
-        let html = format!(r#"<img src="linkon-file://{}"><img src="linkon-file://999">{FIT_TAG}"#, f.id);
+        let html = format!(r#"<img src="linkon-file://{}"><img src="linkon-file://999"><img src="linkon-file://{}">{FIT_TAG}"#, f.id, js.id);
         let (rel, dir) = write_site(&c, &lib, &root, page, &html).unwrap();
         assert_eq!(rel, "cafe-aurora/inicio");
         let index = fs::read_to_string(dir.join("index.html")).unwrap();
-        assert!(index.contains(r#"src="assets/"#) && index.contains(r#"src="data:,""#));
+        assert!(index.contains(r#"src="assets/"#) && index.matches(r#"src="data:,""#).count() == 2);
         assert_eq!(fs::read_dir(dir.join("assets")).unwrap().count(), 1);
         assert!(dir.join("vercel.json").exists() && dir.join("fit.js").exists());
         assert!(!dir.join("linkon.js").exists());

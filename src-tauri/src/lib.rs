@@ -221,6 +221,7 @@ fn site_rel(state: &AppDb, page_id: i64) -> Result<String, String> {
                 .optional()
                 .map_err(|e| e.to_string())
         })?
+        .filter(|rel| site::valid_rel(rel))
         .ok_or_else(|| "Salve a interface antes de publicar.".to_string())
 }
 
